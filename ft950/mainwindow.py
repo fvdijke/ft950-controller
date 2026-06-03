@@ -248,11 +248,11 @@ class MainWindow(QMainWindow):
                        f" background:#1A1A1A; border:1px solid #333;"
                        f" border-radius:2px; padding:0 5px;")
         self._sb_utc  = QLabel("UTC --:--:--")
-        self._sb_est  = QLabel("EST --:--:--")
+        self._sb_cest = QLabel("CEST --:--:--")
         self._sb_utc.setStyleSheet(_time_style)
-        self._sb_est.setStyleSheet(_time_style)
+        self._sb_cest.setStyleSheet(_time_style)
         sb.addPermanentWidget(self._sb_utc)
-        sb.addPermanentWidget(self._sb_est)
+        sb.addPermanentWidget(self._sb_cest)
 
         # Statusbadges helemaal rechts (permanent = rechterzijde van statusbar)
         _badge_style = "padding:0 3px;"
@@ -271,10 +271,13 @@ class MainWindow(QMainWindow):
 
     def _update_clock(self):
         from datetime import datetime, timezone, timedelta
-        now_utc = datetime.now(timezone.utc)
-        now_est = now_utc.astimezone(timezone(timedelta(hours=-5)))   # EST = UTC-5
+        now_utc  = datetime.now(timezone.utc)
+        # CEST = Central European Summer Time = UTC+2
+        # CET  = Central European (Winter) Time = UTC+1
+        # Python's astimezone() gebruikt de lokale systeemtijdzone
+        now_cest = now_utc.astimezone()   # lokale tijdzone (automatisch CET/CEST)
         self._sb_utc.setText(f"UTC {now_utc.strftime('%H:%M:%S')}")
-        self._sb_est.setText(f"EST {now_est.strftime('%H:%M:%S')}")
+        self._sb_cest.setText(f"CEST {now_cest.strftime('%H:%M:%S')}")
 
     # ── Signaalverbindingen ───────────────────────────────────────────────────
 
