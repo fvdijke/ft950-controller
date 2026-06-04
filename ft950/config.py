@@ -5,11 +5,17 @@ import os
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
-_HERE          = os.path.dirname(os.path.abspath(__file__))
-_CONFIG_FILE   = os.path.join(_HERE, "..", "ft950_config.json")
-_MEMORIES_FILE  = os.path.join(_HERE, "..", "ft950_memories.json")
-_EIBI_FILE      = os.path.join(_HERE, "..", "ft950_eibi.json")
-_CHANNELS_FILE  = os.path.join(_HERE, "..", "ft950_channels.json")
+import sys as _sys
+
+# When running as a frozen onefile exe, user data must live next to sys.executable
+_DATA_DIR = (os.path.dirname(_sys.executable)
+             if getattr(_sys, "frozen", False)
+             else os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+_CONFIG_FILE   = os.path.join(_DATA_DIR, "ft950_config.json")
+_MEMORIES_FILE = os.path.join(_DATA_DIR, "ft950_memories.json")
+_EIBI_FILE     = os.path.join(_DATA_DIR, "ft950_eibi.json")
+_CHANNELS_FILE = os.path.join(_DATA_DIR, "ft950_channels.json")
 
 
 @dataclass
