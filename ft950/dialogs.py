@@ -1677,10 +1677,10 @@ class SMeterCalibDialog(QDialog):
             spn.valueChanged.connect(self._on_spin_change)
             self._spins.append(spn)
 
-            btn_use = QPushButton("←"); btn_use.setFixedWidth(26)
+            btn_use = QPushButton("◄"); btn_use.setFixedWidth(26)
             btn_use.setObjectName("test")
             btn_use.clicked.connect(lambda _, idx=i: self._use_current(idx))
-            btn_use.setToolTip("Gebruik actuele live waarde")
+            btn_use.setToolTip("◄  Neem de huidige waarde van de radio over")
 
             gc.addWidget(lbl_w,   row_pos, col_base)
             gc.addWidget(spn,     row_pos, col_base + 1)

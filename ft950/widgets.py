@@ -732,11 +732,11 @@ class SMeterBar(QWidget):
         "", "", "+60",  # +40 → +60 dB
     ]
     _MARK_COLORS = [
-        "#A0A0A0","#A0A0A0","#A0A0A0",   # 0 → S1   (licht grijs)
-        "#A0A0A0","#A0A0A0","#A0A0A0",   # S1 → S3
-        "#A0A0A0","#A0A0A0","#A0A0A0",   # S3 → S5
-        "#A0A0A0","#A0A0A0","#A0A0A0",   # S5 → S7
-        "#A0A0A0","#A0A0A0","#A0A0A0",   # S7 → S9
+        "#787878","#787878","#787878",   # 0 → S1   (grijs)
+        "#787878","#787878","#787878",   # S1 → S3
+        "#787878","#787878","#787878",   # S3 → S5
+        "#787878","#787878","#787878",   # S5 → S7
+        "#787878","#787878","#787878",   # S7 → S9
         "#FF2020","#FF2020","#FF2020",   # S9 → +20  (rood)
         "#FF2020","#FF2020","#FF2020",   # +20 → +40
         "#FF2020","#FF2020","#FF2020",   # +40 → +60
@@ -784,8 +784,9 @@ class SMeterBar(QWidget):
 
     @property
     def _MARKS(self):
+        n = len(self._raw_cal)
         return [(self._raw_cal[i], self._MARK_LABELS[i], self._MARK_COLORS[i])
-                for i in range(8)]
+                for i in range(n)]
 
     # Blokstijl: eerste 5 = amber (S1-S9), laatste 3 = rood (+20/+40/+60)
     _BLOCK_ON_AMBER  = "#FFAA00"
