@@ -1677,10 +1677,16 @@ class SMeterCalibDialog(QDialog):
             spn.valueChanged.connect(self._on_spin_change)
             self._spins.append(spn)
 
-            btn_use = QPushButton("◄"); btn_use.setFixedWidth(26)
+            btn_use = QPushButton("◄")
+            btn_use.setFixedSize(30, 22)
             btn_use.setObjectName("test")
+            btn_use.setStyleSheet(
+                f"QPushButton{{background:#1A3A1A;color:#4CAF50;"
+                f"border:1px solid #2A5A2A;border-radius:2px;"
+                f"font-size:10pt;padding:0px;}}"
+                f"QPushButton:hover{{background:#2A5A2A;}}")
             btn_use.clicked.connect(lambda _, idx=i: self._use_current(idx))
-            btn_use.setToolTip("◄  Neem de huidige waarde van de radio over")
+            btn_use.setToolTip("◄  Neem de huidige S-meter waarde van de radio over")
 
             gc.addWidget(lbl_w,   row_pos, col_base)
             gc.addWidget(spn,     row_pos, col_base + 1)
@@ -1739,6 +1745,11 @@ class SMeterCalibDialog(QDialog):
         self._current_raw = raw
 
     def _get_live(self) -> int:
+        # Directe bron: de smeter-widget zelf heeft altijd de meest actuele waarde
+        val = getattr(self._smeter, "_value", 0)
+        if val > 0:
+            return val
+        # Fallback: callable live-source of intern bijgehouden waarde
         if hasattr(self, "_live_source"):
             return self._live_source()
         return self._current_raw
