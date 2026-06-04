@@ -39,7 +39,7 @@ def _draw_7seg_char(p: QPainter, x: int, y: int, sw: int, sh: int,
     Horizontale segmenten: zeshoek met afgeschuinde linker- en rechterhoeken.
     Verticale segmenten: zeshoek met afgeschuinde boven- en onderhoeken.
     """
-    t    = max(4, sw // 3)      # segmentdikte (⅓ van breedte)
+    t    = max(4, (sw + 2) // 4)  # segmentdikte (~27% van breedte)
     bv   = max(1, t * 2 // 5)  # bevel: afschuining aan de uiteinden
     g    = max(1, t // 5)       # spleet tussen segmenten
     half = sh // 2
@@ -456,6 +456,7 @@ class SmallVfd(QWidget):
         self.setFixedHeight(h)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setStyleSheet(f"background:{BG_DISPLAY};")
+        self.setToolTip("Rechtsklik om modulatie VFO-B te wijzigen")
         if interactive:
             self.setCursor(Qt.PointingHandCursor)
             self.setFocusPolicy(Qt.WheelFocus)
