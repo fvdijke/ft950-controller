@@ -22,6 +22,42 @@ from .theme import (BG_DISPLAY, VFD_BRIGHT, VFD_DIM, VFD_AMBER, VFD_OFF,
                     TEXT_H1, TEXT_DIM, GROUP_BORDER, ACCENT)
 
 
+# ── 7-segment teken-hulp ──────────────────────────────────────────────────────
+
+_7SEG_MAP = {
+    '0': 'abcdef',  '1': 'bc',    '2': 'abdeg',
+    '3': 'abcdg',   '4': 'bcfg',  '5': 'acdfg',
+    '6': 'acdefg',  '7': 'abc',   '8': 'abcdefg',
+    '9': 'abcdfg',  '-': 'g',     ' ': '',
+}
+
+
+def _draw_7seg_char(p: QPainter, x: int, y: int, sw: int, sh: int,
+                    char: str, on_col: str, off_col: str):
+    """Teken één 7-segment karakter op (x, y) met afmetingen sw × sh."""
+    t = max(2, sw // 5)   # segmentdikte
+    m = 1                 # marge tussen segment en hoek
+    half = sh // 2
+    active = set(_7SEG_MAP.get(char, ''))
+
+    def seg(s):
+        if s == 'a': return x + t + m,      y,               sw - 2*t - 2*m, t
+        if s == 'b': return x + sw - t,     y + t + m,       t,              half - t - m
+        if s == 'c': return x + sw - t,     y + half,        t,              half - t - m
+        if s == 'd': return x + t + m,      y + sh - t,      sw - 2*t - 2*m, t
+        if s == 'e': return x,              y + half,        t,              half - t - m
+        if s == 'f': return x,              y + t + m,       t,              half - t - m
+        if s == 'g': return x + t + m,      y + half - t//2, sw - 2*t - 2*m, t
+
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(off_col))
+    for s in 'abcdefg':
+        p.drawRect(*seg(s))
+    p.setBrush(QColor(on_col))
+    for s in active:
+        p.drawRect(*seg(s))
+
+
 # ── VFD Display ───────────────────────────────────────────────────────────────
 
 class VfdDisplay(QWidget):
@@ -100,28 +136,18 @@ class VfdDisplay(QWidget):
     def mouseMoveEvent(self, event):
         if not self._hovered:
             return
-        x_start, char_w = self._string_start_and_charwidth()
-        rel = event.position().x() - x_start
-        if rel >= 0:
-            idx = int(rel // char_w)
-            if 0 <= idx < len(self._DIGIT_STEPS) and self._DIGIT_STEPS[idx] is not None:
-                if idx != self._selected_char:
-                    self._selected_char = idx
-                    self.update()
+        idx = self._hit_digit_idx(int(event.position().x()))
+        if idx is not None and idx != self._selected_char:
+            self._selected_char = idx
+            self.update()
 
     def mousePressEvent(self, event):
-        if not self._hovered:
+        if not self._hovered or event.button() != Qt.LeftButton:
             return
-        if event.button() == Qt.LeftButton:
-            x = event.position().x()
-            x_start, char_w = self._string_start_and_charwidth()
-            rel   = x - x_start
-            if rel >= 0:
-                idx = int(rel // char_w)
-                if 0 <= idx < len(self._DIGIT_STEPS):
-                    if self._DIGIT_STEPS[idx] is not None:
-                        self._selected_char = idx
-                        self.update()
+        idx = self._hit_digit_idx(int(event.position().x()))
+        if idx is not None:
+            self._selected_char = idx
+            self.update()
 
     def wheelEvent(self, event):
         if not self._hovered:
@@ -140,102 +166,120 @@ class VfdDisplay(QWidget):
         hz_r = hz % 1_000
         return f"{mhz:2d}.{khz:03d}.{hz_r:03d}"
 
-    def _string_start_and_charwidth(self) -> tuple[int, int]:
-        freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
-        freq_fm   = QFontMetrics(freq_font)
-        freq_w    = freq_fm.horizontalAdvance(self._freq_str())
-        char_w    = freq_fm.horizontalAdvance("0")
-        aux_font  = QFont("Consolas", max(9, int(self._font_sz * 0.4)), QFont.Bold)
-        aux_fm    = QFontMetrics(aux_font)
-        mode_w    = aux_fm.horizontalAdvance(self._mode) + 12 if self._mode else 0
-        kHz_w     = aux_fm.horizontalAdvance("kHz") + 8
-        total_w   = mode_w + freq_w + kHz_w
-        freq_x    = (self.width() - total_w) // 2 + mode_w
-        return freq_x, char_w
+    def _compute_7seg_layout(self) -> dict:
+        fm      = QFontMetrics(QFont("Consolas", self._font_sz, QFont.Bold))
+        seg_h   = fm.height()
+        seg_w   = max(12, int(seg_h * 0.52))
+        gap     = max(2,  seg_w // 7)
+        dot_w   = max(6,  int(seg_w * 0.28)) + gap
+
+        aux_sz  = max(9, int(self._font_sz * 0.4))
+        aux_fm  = QFontMetrics(QFont("Consolas", aux_sz, QFont.Bold))
+
+        freq_str = self._freq_str()
+        offsets  = []   # x-offset vanaf freq_start per karakter
+        x = 0
+        for c in freq_str:
+            offsets.append(x)
+            x += dot_w if c == '.' else (seg_w + gap)
+        freq_total_w = x
+
+        mode_text = self._mode
+        mode_w    = aux_fm.horizontalAdvance(mode_text) + 12 if mode_text else 0
+        kHz_w     = aux_fm.horizontalAdvance("kHz")
+        total_w   = mode_w + freq_total_w + 8 + kHz_w
+        group_x   = (self.width() - total_w) // 2
+        freq_x    = group_x + mode_w
+
+        tag_fm    = QFontMetrics(QFont("Segoe UI", 7, QFont.Bold))
+        tag_h     = tag_fm.height()
+        c_top     = tag_h + 2
+        c_h       = self.height() - c_top - 4
+        seg_y     = c_top + max(0, (c_h - seg_h) // 2)
+
+        return dict(seg_w=seg_w, seg_h=seg_h, gap=gap, dot_w=dot_w,
+                    freq_str=freq_str, offsets=offsets,
+                    freq_x=freq_x, freq_total_w=freq_total_w,
+                    mode_text=mode_text, group_x=group_x,
+                    kHz_x=freq_x + freq_total_w + 8,
+                    aux_sz=aux_sz, aux_fm=aux_fm,
+                    seg_y=seg_y, c_top=c_top, c_h=c_h)
+
+    def _hit_digit_idx(self, mouse_x: int) -> int | None:
+        lo = self._compute_7seg_layout()
+        for i, x_off in enumerate(lo['offsets']):
+            c  = lo['freq_str'][i]
+            cx = lo['freq_x'] + x_off
+            cw = lo['dot_w'] if c == '.' else lo['seg_w'] + lo['gap']
+            if cx <= mouse_x < cx + cw:
+                if self._DIGIT_STEPS[i] is not None:
+                    return i
+        return None
 
     # ── Tekenen ───────────────────────────────────────────────────────────────
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
 
-        # ── Achtergrond ───────────────────────────────────────────────────────
+        # ── Achtergrond + kader ───────────────────────────────────────────────
         p.fillRect(self.rect(), QColor(BG_DISPLAY))
-
-        # ── Kader ─────────────────────────────────────────────────────────────
+        p.setRenderHint(QPainter.Antialiasing, True)
         border_col = QColor(ACCENT if self._hovered else VFD_DIM)
         p.setPen(QPen(border_col, 1))
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 4, 4)
 
-        # ── "VFO-A" linksbovenin het kader (binnen de rand) ─────────────────
+        # ── "VFO-A" label binnenin kader linksbovenin ────────────────────────
         tag_font = QFont("Segoe UI", 7, QFont.Bold)
         tag_fm   = QFontMetrics(tag_font)
-        tag_text = "VFO-A"
-        tag_h    = tag_fm.height()
         p.setFont(tag_font)
         p.setPen(border_col)
-        p.drawText(6, 4 + tag_fm.ascent(), tag_text)
+        p.drawText(6, 4 + tag_fm.ascent(), "VFO-A")
 
-        # ── Metriek ───────────────────────────────────────────────────────────
-        freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
-        freq_fm   = QFontMetrics(freq_font)
-        freq_str  = self._freq_str()
-        freq_w    = freq_fm.horizontalAdvance(freq_str)
-        char_w    = freq_fm.horizontalAdvance("0")
+        # ── Layout berekenen ──────────────────────────────────────────────────
+        lo = self._compute_7seg_layout()
+        seg_w   = lo['seg_w'];  seg_h  = lo['seg_h']
+        dot_w   = lo['dot_w'];  gap    = lo['gap']
+        freq_x  = lo['freq_x']; seg_y  = lo['seg_y']
+        freq_str = lo['freq_str']
+        c_top   = lo['c_top'];  c_h    = lo['c_h']
 
-        aux_sz    = max(9, int(self._font_sz * 0.4))
-        aux_font  = QFont("Consolas", aux_sz, QFont.Bold)
-        aux_fm    = QFontMetrics(aux_font)
+        p.setRenderHint(QPainter.Antialiasing, False)
 
-        mode_text = self._mode
-        mode_w    = aux_fm.horizontalAdvance(mode_text) + 12 if mode_text else 0
-        kHz_w     = aux_fm.horizontalAdvance("kHz")
-        kHz_gap   = 8
-
-        total_w  = mode_w + freq_w + kHz_gap + kHz_w
-        group_x  = (self.width() - total_w) // 2
-        freq_x   = group_x + mode_w
-        kHz_x    = freq_x + freq_w + kHz_gap
-
-        content_top = tag_h + 2
-        content_h   = self.height() - content_top - 4
-        y_base = content_top + (content_h - freq_fm.height()) // 2 + freq_fm.ascent()
-        y_base = max(content_top + freq_fm.ascent(), y_base)
-
-        # ── Ghost ─────────────────────────────────────────────────────────────
-        p.setFont(freq_font)
-        for i, gc in enumerate("88.888.888"):
-            p.setPen(QColor(VFD_OFF))
-            p.drawText(int(freq_x + i * char_w), y_base, gc)
-
-        # ── Frequentie-digits ─────────────────────────────────────────────────
-        for i, c in enumerate(freq_str):
-            x = int(freq_x + i * char_w)
-            if self._hovered and i == self._selected_char:
-                box_top = y_base - freq_fm.ascent()
-                p.fillRect(x - 1, box_top, char_w + 2, freq_fm.height(), QColor("#1A1400"))
-                p.setPen(QPen(QColor(VFD_AMBER), 1))
-                p.drawRect(x - 1, box_top, char_w + 1, freq_fm.height() - 1)
-                p.setPen(QColor(VFD_AMBER))
-            elif c == '.':
-                p.setPen(QColor(VFD_DIM))
+        # ── Digits ────────────────────────────────────────────────────────────
+        for i, (c, x_off) in enumerate(zip(freq_str, lo['offsets'])):
+            cx = freq_x + x_off
+            if c == '.':
+                dot_sz = max(3, seg_w // 5)
+                dx = cx + (dot_w - gap - dot_sz) // 2
+                dy = seg_y + seg_h - dot_sz
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(VFD_DIM))
+                p.drawRect(dx, dy, dot_sz, dot_sz)
             else:
-                p.setPen(QColor(VFD_BRIGHT))
-            p.drawText(x, y_base, c)
+                selected = self._hovered and i == self._selected_char
+                on_col   = VFD_AMBER if selected else VFD_BRIGHT
+                if selected:
+                    p.setPen(QPen(QColor(VFD_AMBER), 1))
+                    p.setBrush(QColor("#1A1400"))
+                    p.drawRect(cx - 1, seg_y, seg_w + 2, seg_h)
+                _draw_7seg_char(p, cx, seg_y, seg_w, seg_h, c, on_col, VFD_OFF)
 
-        # ── Mode voor frequentie (amber) ──────────────────────────────────────
-        if mode_text:
+        # ── Mode voor frequentie ──────────────────────────────────────────────
+        aux_font = QFont("Consolas", lo['aux_sz'], QFont.Bold)
+        aux_fm   = lo['aux_fm']
+        aux_y    = c_top + (c_h - aux_fm.height()) // 2 + aux_fm.ascent()
+        if lo['mode_text']:
+            p.setRenderHint(QPainter.Antialiasing, True)
             p.setFont(aux_font)
             p.setPen(QColor(VFD_AMBER))
-            aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
-            p.drawText(group_x, aux_y, mode_text)
+            p.drawText(lo['group_x'], aux_y, lo['mode_text'])
 
-        # ── kHz na frequentie (dim) ───────────────────────────────────────────
+        # ── kHz na frequentie ─────────────────────────────────────────────────
+        p.setRenderHint(QPainter.Antialiasing, True)
         p.setFont(aux_font)
         p.setPen(QColor(VFD_DIM))
-        aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
-        p.drawText(kHz_x, aux_y, "kHz")
+        p.drawText(lo['kHz_x'], aux_y, "kHz")
 
         p.end()
 
@@ -412,18 +456,55 @@ class SmallVfd(QWidget):
         hzr = hz % 1_000
         return f"{mhz:2d}.{khz:03d}.{hzr:03d}"
 
-    def _char_metrics(self):
-        freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
-        freq_fm   = QFontMetrics(freq_font)
-        freq_w    = freq_fm.horizontalAdvance(self._freq_str())
-        cw        = freq_fm.horizontalAdvance("0")
-        aux_sz    = max(6, int(self._font_sz * 0.6))
-        aux_fm    = QFontMetrics(QFont("Consolas", aux_sz, QFont.Bold))
-        mode_w    = aux_fm.horizontalAdvance(self._mode) + 8 if self._mode else 0
-        kHz_w     = aux_fm.horizontalAdvance("kHz") + 6
-        total_w   = mode_w + freq_w + kHz_w
-        freq_x    = (self.width() - total_w) // 2 + mode_w
-        return freq_font, freq_fm, freq_x, cw
+    def _compute_7seg_layout(self) -> dict:
+        fm      = QFontMetrics(QFont("Consolas", self._font_sz, QFont.Bold))
+        seg_h   = fm.height()
+        seg_w   = max(8,  int(seg_h * 0.52))
+        gap     = max(2,  seg_w // 7)
+        dot_w   = max(5,  int(seg_w * 0.28)) + gap
+
+        aux_sz  = max(6, int(self._font_sz * 0.6))
+        aux_fm  = QFontMetrics(QFont("Consolas", aux_sz, QFont.Bold))
+
+        freq_str = self._freq_str()
+        offsets  = []
+        x = 0
+        for c in freq_str:
+            offsets.append(x)
+            x += dot_w if c == '.' else (seg_w + gap)
+        freq_total_w = x
+
+        mode_text = self._mode
+        mode_w    = aux_fm.horizontalAdvance(mode_text) + 8 if mode_text else 0
+        kHz_w     = aux_fm.horizontalAdvance("kHz")
+        total_w   = mode_w + freq_total_w + 6 + kHz_w
+        group_x   = (self.width() - total_w) // 2
+        freq_x    = group_x + mode_w
+
+        tag_fm    = QFontMetrics(QFont("Segoe UI", 6, QFont.Bold))
+        tag_h     = tag_fm.height()
+        c_top     = tag_h + 1
+        c_h       = self.height() - c_top - 3
+        seg_y     = c_top + max(0, (c_h - seg_h) // 2)
+
+        return dict(seg_w=seg_w, seg_h=seg_h, gap=gap, dot_w=dot_w,
+                    freq_str=freq_str, offsets=offsets,
+                    freq_x=freq_x, freq_total_w=freq_total_w,
+                    mode_text=mode_text, group_x=group_x,
+                    kHz_x=freq_x + freq_total_w + 6,
+                    aux_sz=aux_sz, aux_fm=aux_fm,
+                    seg_y=seg_y, c_top=c_top, c_h=c_h)
+
+    def _hit_digit_idx(self, mouse_x: int) -> int | None:
+        lo = self._compute_7seg_layout()
+        for i, x_off in enumerate(lo['offsets']):
+            c  = lo['freq_str'][i]
+            cx = lo['freq_x'] + x_off
+            cw = lo['dot_w'] if c == '.' else lo['seg_w'] + lo['gap']
+            if cx <= mouse_x < cx + cw:
+                if self._DIGIT_STEPS[i] is not None:
+                    return i
+        return None
 
     def enterEvent(self, event):
         if self._interactive:
@@ -438,27 +519,18 @@ class SmallVfd(QWidget):
     def mouseMoveEvent(self, event):
         if not self._interactive or not self._hovered:
             return
-        _, _, x0, cw = self._char_metrics()
-        rel = event.position().x() - x0
-        if rel >= 0:
-            idx = int(rel // cw)
-            if 0 <= idx < len(self._DIGIT_STEPS) and self._DIGIT_STEPS[idx] is not None:
-                if idx != self._selected:
-                    self._selected = idx
-                    self.update()
+        idx = self._hit_digit_idx(int(event.position().x()))
+        if idx is not None and idx != self._selected:
+            self._selected = idx
+            self.update()
 
     def mousePressEvent(self, event):
-        if not self._interactive or not self._hovered:
+        if not self._interactive or not self._hovered or event.button() != Qt.LeftButton:
             return
-        if event.button() != Qt.LeftButton:
-            return
-        _, _, x0, cw = self._char_metrics()
-        rel = event.position().x() - x0
-        if rel >= 0:
-            idx = int(rel // cw)
-            if 0 <= idx < len(self._DIGIT_STEPS) and self._DIGIT_STEPS[idx] is not None:
-                self._selected = idx
-                self.update()
+        idx = self._hit_digit_idx(int(event.position().x()))
+        if idx is not None:
+            self._selected = idx
+            self.update()
 
     def wheelEvent(self, event):
         if not self._interactive or not self._hovered or self._freq_hz == 0:
@@ -474,77 +546,66 @@ class SmallVfd(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), QColor(BG_DISPLAY))
 
         # ── Kader ─────────────────────────────────────────────────────────────
+        p.setRenderHint(QPainter.Antialiasing, True)
         border_col = QColor(ACCENT if (self._interactive and self._hovered) else VFD_DIM)
         p.setPen(QPen(border_col, 1))
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 3, 3)
 
-        # ── Label linksbovenin het kader (binnen de rand) ───────────────────
+        # ── Label linksbovenin het kader ─────────────────────────────────────
         tag_font = QFont("Segoe UI", 6, QFont.Bold)
         tag_fm   = QFontMetrics(tag_font)
-        tag_h    = tag_fm.height()
         p.setFont(tag_font)
         p.setPen(border_col)
         p.drawText(5, 3 + tag_fm.ascent(), self._label)
 
-        # ── Metriek ───────────────────────────────────────────────────────────
-        freq_font, freq_fm, freq_x, cw = self._char_metrics()
-        freq_str  = self._freq_str()
-        freq_w    = freq_fm.horizontalAdvance(freq_str)
+        # ── Layout ────────────────────────────────────────────────────────────
+        lo = self._compute_7seg_layout()
+        seg_w  = lo['seg_w'];  seg_h  = lo['seg_h']
+        dot_w  = lo['dot_w'];  gap    = lo['gap']
+        freq_x = lo['freq_x']; seg_y  = lo['seg_y']
+        c_top  = lo['c_top'];  c_h    = lo['c_h']
 
-        aux_sz    = max(6, int(self._font_sz * 0.6))
-        aux_font  = QFont("Consolas", aux_sz, QFont.Bold)
-        aux_fm    = QFontMetrics(aux_font)
+        p.setRenderHint(QPainter.Antialiasing, False)
 
-        mode_text = self._mode
-        mode_w    = aux_fm.horizontalAdvance(mode_text) + 8 if mode_text else 0
-        kHz_gap   = 6
-        kHz_x     = freq_x + freq_w + kHz_gap
-        group_x   = freq_x - mode_w
-
-        content_top = tag_h + 1
-        content_h   = self.height() - content_top - 3
-        y_base = content_top + (content_h - freq_fm.height()) // 2 + freq_fm.ascent()
-        y_base = max(content_top + freq_fm.ascent(), y_base)
-
-        # ── Ghost ─────────────────────────────────────────────────────────────
-        p.setFont(freq_font)
-        for i, gc in enumerate("88.888.888"):
-            p.setPen(QColor(VFD_OFF))
-            p.drawText(int(freq_x + i * cw), y_base, gc)
-
-        # ── Frequentie-digits ─────────────────────────────────────────────────
+        # ── Digits ────────────────────────────────────────────────────────────
         hovering = self._interactive and self._hovered and self._freq_hz > 0
-        for i, c in enumerate(freq_str):
-            x = int(freq_x + i * cw)
-            if hovering and i == self._selected:
-                box_top = y_base - freq_fm.ascent()
-                p.fillRect(x - 1, box_top, int(cw) + 2, freq_fm.height(), QColor("#1A1400"))
-                p.setPen(QPen(QColor(VFD_AMBER), 1))
-                p.drawRect(x - 1, box_top, int(cw) + 1, freq_fm.height() - 1)
-                p.setPen(QColor(VFD_AMBER))
-            elif c == '.':
-                p.setPen(QColor(VFD_OFF))
+        for i, (c, x_off) in enumerate(zip(lo['freq_str'], lo['offsets'])):
+            cx = freq_x + x_off
+            if c == '.':
+                dot_sz = max(2, seg_w // 5)
+                dx = cx + (dot_w - gap - dot_sz) // 2
+                dy = seg_y + seg_h - dot_sz
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(VFD_DIM))
+                p.drawRect(dx, dy, dot_sz, dot_sz)
             else:
-                p.setPen(QColor(VFD_DIM))
-            p.drawText(x, y_base, c)
+                selected = hovering and i == self._selected
+                on_col   = VFD_AMBER if selected else VFD_DIM
+                if selected:
+                    p.setPen(QPen(QColor(VFD_AMBER), 1))
+                    p.setBrush(QColor("#1A1400"))
+                    p.drawRect(cx - 1, seg_y, seg_w + 2, seg_h)
+                _draw_7seg_char(p, cx, seg_y, seg_w, seg_h, c, on_col, VFD_OFF)
 
-        # ── Mode voor frequentie (amber) ──────────────────────────────────────
-        if mode_text:
+        # ── Mode ─────────────────────────────────────────────────────────────
+        aux_font = QFont("Consolas", lo['aux_sz'], QFont.Bold)
+        aux_fm   = lo['aux_fm']
+        aux_y    = c_top + (c_h - aux_fm.height()) // 2 + aux_fm.ascent()
+        if lo['mode_text']:
+            p.setRenderHint(QPainter.Antialiasing, True)
             p.setFont(aux_font)
             p.setPen(QColor(VFD_AMBER))
-            aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
-            p.drawText(group_x, aux_y, mode_text)
+            p.drawText(lo['group_x'], aux_y, lo['mode_text'])
 
-        # ── kHz na frequentie (dim) ───────────────────────────────────────────
+        # ── kHz ───────────────────────────────────────────────────────────────
+        p.setRenderHint(QPainter.Antialiasing, True)
         p.setFont(aux_font)
         p.setPen(QColor(VFD_DIM))
-        aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
-        p.drawText(kHz_x, aux_y, "kHz")
+        p.drawText(lo['kHz_x'], aux_y, "kHz")
 
         p.end()
 
