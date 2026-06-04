@@ -773,7 +773,7 @@ class SMeterBar(QWidget):
     _BLOCK_ON_RED    = "#FF2020"
     _BLOCK_OFF       = "#1A1008"    # donker amber-uit voor S-blokjes
     _BLOCK_OFF_RED   = "#1A0808"    # donker rood-uit voor +dB-blokjes
-    _BLOCK_GAP       = 2            # pixels tussen blokjes
+    _BLOCK_GAP       = 1            # pixels tussen blokjes
 
     def set_value(self, v: int):
         self._value = max(0, min(255, v))
@@ -784,12 +784,12 @@ class SMeterBar(QWidget):
         p.setRenderHint(QPainter.Antialiasing, False)
         w, h = self.width(), self.height()
 
-        N       = 8
+        N       = len(self._MARKS)   # dynamisch: 15 kalibratiepunten
         LBL_W   = 14                 # "S" label links
         PTR_H   = 8                  # hoogte voor wijzer bovenaan
         LBL_H   = 10                 # hoogte labels boven blokjes
         GAP     = self._BLOCK_GAP
-        blk_w   = max(6, (w - LBL_W - GAP * (N - 1)) // N)
+        blk_w   = max(4, (w - LBL_W - GAP * (N - 1)) // N)
         blk_h   = max(4, (h - PTR_H - LBL_H - 4) // 3)
         lbl_y   = PTR_H              # labels beginnen na wijzerzone
         blk_y   = PTR_H + LBL_H + 2
