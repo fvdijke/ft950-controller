@@ -1726,8 +1726,9 @@ class SMeterCalibDialog(QDialog):
         self._live_lbl.setText(f"Ruwe waarde: {raw}   ≈ {level}")
 
     def _on_spin_change(self):
-        self._preview.set_calibration(self.get_calibration())
-        # Wijzer volgt de actieve spinbox
+        cal = self.get_calibration()
+        self._preview.set_calibration(cal)   # dialoog-preview
+        self._smeter.set_calibration(cal)    # echte S-meter in het hoofdvenster
         if self._spins:
             self._preview.set_pointer(self._spins[self._active_spin].value())
 

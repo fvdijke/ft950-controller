@@ -1140,13 +1140,12 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _open_smeter_calib(self):
-        current_cal = self._cfg.smeter_cal
+        original_cal = list(self._cfg.smeter_cal)   # kopie voor herstel bij Annuleer
         dlg = SMeterCalibDialog(
             smeter_widget = self._display._smeter,
-            current_cal   = current_cal,
+            current_cal   = original_cal,
             parent        = self,
         )
-        # Geef een directe callable mee — altijd de versste waarde bij elke aanroep
         dlg.set_live_source(lambda: getattr(self, "_last_smeter_raw", 0))
 
         if dlg.exec():
@@ -1154,6 +1153,9 @@ class MainWindow(QMainWindow):
             self._cfg.smeter_cal = new_cal
             self._display._smeter.set_calibration(new_cal)
             save_config(self._cfg)
+        else:
+            # Herstel originele kalibratie (dialoog heeft de echte balk al gewijzigd)
+            self._display._smeter.set_calibration(original_cal)
 
     def _open_cat_log(self):
         # Simpele info: CAT-log venster is in development
