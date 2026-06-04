@@ -129,9 +129,10 @@ _BTN_NORM = _btn_style(7)   # standaard bij import
 class DisplayPanel(QWidget):
     """Het complete VFD-display van de FT-950 nagebouwd (verticale layout)."""
 
-    sig_freq_changed = Signal(int)
-    sig_band         = Signal(str)   # band geselecteerd vanuit display
-    sig_mode         = Signal(str)   # mode geselecteerd vanuit display
+    sig_freq_changed   = Signal(int)
+    sig_freq_b_changed = Signal(int)   # VFO-B afstemming via scrollwiel
+    sig_band           = Signal(str)
+    sig_mode           = Signal(str)
 
     _BANDS = [
         ("1.8",  "160m"), ("3.5", "80m"),  ("7",   "40m"),
@@ -144,8 +145,10 @@ class DisplayPanel(QWidget):
         ("AM",  "AM"),  ("FM",  "FM"),  ("RTTY","RTTY"),
     ]
 
-    def __init__(self, parent=None):
+    def __init__(self, vfob_font: int = 14, clar_font: int = 14, parent=None):
         super().__init__(parent)
+        self._vfob_font = vfob_font
+        self._clar_font = clar_font
         self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
         self.setMinimumWidth(330)
         self._band_btns: dict[str, QPushButton] = {}
@@ -232,8 +235,9 @@ class DisplayPanel(QWidget):
         # ── Rij 3: VFO-B (boven) + CLAR (eronder) gestapeld ─────────────────
         vfo_col = QVBoxLayout()
         vfo_col.setSpacing(2)
-        self._vfd_b    = SmallVfd("VFO-B")
-        self._vfd_clar = SmallVfd("CLAR")
+        self._vfd_b    = SmallVfd("VFO-B", interactive=True, font_size=self._vfob_font)
+        self._vfd_b.sig_freq_changed.connect(self.sig_freq_b_changed)
+        self._vfd_clar = SmallVfd("CLAR", font_size=self._clar_font)
         vfo_col.addWidget(self._vfd_b)
         vfo_col.addWidget(self._vfd_clar)
         root.addLayout(vfo_col)
@@ -272,9 +276,7 @@ class DisplayPanel(QWidget):
         self.sig_mode.emit(mode)
 
     def set_tx(self, on: bool):
-        self._badge_tx.set_active(on)
-        if on:
-            self._badge_busy.set_active(False)   # bij zenden nooit BUSY
+        pass  # TX-badge wordt nu beheerd via mainwindow._set_tx_active (knipperend)
 
     def set_busy(self, on: bool):
         self._badge_busy.set_active(on)

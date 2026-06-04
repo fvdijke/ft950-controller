@@ -23,6 +23,7 @@ from .theme   import (BG_PANEL, BTN_NORMAL, BTN_HOVER, BORDER,
                       LED_ORANGE, BG_SURFACE, LED_AMBER, GROUP_BORDER,
                       VFD_AMBER)
 from .widgets import LedButton, RadioButton, SectionFrame, SMeterBar, TxMeterBar, StatusBadge
+from .i18n    import tr
 
 
 def _sep(vertical: bool = False) -> QFrame:
@@ -252,7 +253,7 @@ class CombinedLeftPanel(QWidget):
         v.setSpacing(5)
 
         # ── VERBINDEN / VERBREKEN ─────────────────────────────────────────────
-        self.btn_power = QPushButton("⬤  Verbinden")
+        self.btn_power = QPushButton(tr("⬤  Verbinden"))
         self.btn_power.setFixedHeight(34)
         self.btn_power.setFont(QFont("Segoe UI", 9, QFont.Bold))
         self.btn_power.clicked.connect(self.sig_power)   # mainwindow koppelt toggle
@@ -411,7 +412,7 @@ class CombinedLeftPanel(QWidget):
 
     def _set_conn_style(self, connected: bool):
         if connected:
-            self.btn_power.setText("⬤  Verbreken")
+            self.btn_power.setText(tr("⬤  Verbreken"))
             self.btn_power.setStyleSheet(f"""
                 QPushButton {{
                     background: #3A0A0A;
@@ -425,7 +426,7 @@ class CombinedLeftPanel(QWidget):
                 QPushButton:pressed {{ background: #220000; }}
             """)
         else:
-            self.btn_power.setText("⬤  Verbinden")
+            self.btn_power.setText(tr("⬤  Verbinden"))
             self.btn_power.setStyleSheet(f"""
                 QPushButton {{
                     background: #0A2A0A;
@@ -681,7 +682,7 @@ class VfoPanel(QWidget):
         v.addWidget(_sep())
 
         # Afstem-knoppen (simulatie draaiknop met + / -)
-        v.addWidget(_lbl("AFSTEMSTAP", tiny=True))
+        v.addWidget(_lbl(tr("AFSTEMSTAP"), tiny=True))
         step_row = QHBoxLayout(); step_row.setSpacing(2)
         btn_dn = RadioButton("◀", small=True)
         btn_dn.setFixedWidth(26)
@@ -697,7 +698,7 @@ class VfoPanel(QWidget):
 
         # Stap selectie
         step_sel = QHBoxLayout(); step_sel.setSpacing(2)
-        step_sel.addWidget(_lbl("Stap:", tiny=True))
+        step_sel.addWidget(_lbl(tr("Stap:"), tiny=True))
         self.cmb_step = QComboBox()
         self.cmb_step.addItems(self._STEP_LABELS)
         self.cmb_step.setCurrentIndex(self._step_idx)
@@ -1040,8 +1041,6 @@ class PowerPanel(QWidget):
       Horizontale slider (5-100 W)
       Grote PTT-knop
       ─────────────
-      SWR  ████░░░░  1.5
-      ALC  ████░░░░  ---
       VDD  ████░░░░  13.8 V
       ID   ████░░░░  8.5 A
       COMP ████░░░░  0 dB
@@ -1097,33 +1096,22 @@ class PowerPanel(QWidget):
         v.addWidget(_sep())
 
         # ── PTT ──────────────────────────────────────────────────────────────
-        self.btn_ptt = LedButton("PTT", LED_RED, checkable=True)
+        self.btn_ptt = QPushButton("ON AIR")
+        self.btn_ptt.setCheckable(True)
         self.btn_ptt.setFixedHeight(42)
         self.btn_ptt.setFont(QFont("Segoe UI", 11, QFont.Bold))
         self.btn_ptt.toggled.connect(self.sig_ptt)
+        self._ptt_style_normal()
         v.addWidget(self.btn_ptt)
 
         v.addWidget(_sep())
 
-        # ── TX-meters met schaalverdeling ─────────────────────────────────────
+        # ── TX-meters (VDD, ID, COMP) — SWR en ALC staan in BEDIENING-paneel ──
         v.addWidget(_lbl("TX METERS", tiny=True))
-
-        # Schaalmarkeringen: (raw 0-255, label, kleur)
-        _SWR = [( 43, "1.3", "#00AAFF"),
-                ( 85, "1.5", "#00BB44"),
-                (128, "2.0", "#FFAA00"),
-                (191, "2.5", "#FF6600"),
-                (232, "3.0", "#FF2020")]
-
-        _ALC = [( 51, "20",  "#00BB44"),
-                (102, "40",  "#66CC00"),
-                (153, "60",  "#FFAA00"),
-                (204, "80",  "#FF6600"),
-                (245, "100", "#FF2020")]
 
         _VDD = [(128, "10V",   "#00BB44"),
                 (178, "12V",   "#44CC44"),
-                (222, "13.8",  "#88FF44"),  # nominaal
+                (222, "13.8",  "#88FF44"),
                 (242, "15V",   "#FFCC00")]
 
         _ID  = [( 43, " 5A", "#00BB44"),
@@ -1139,14 +1127,15 @@ class PowerPanel(QWidget):
                 (213, "25",  "#FF2020"),
                 (243, "30",  "#DD0000")]
 
-        self.m_swr  = TxMeterBar("SWR",  _SWR)
-        self.m_alc  = TxMeterBar("ALC",  _ALC)
+        # Dummy-attributen zodat mainwindow.py set_swr/set_alc kan aanroepen
+        # zonder AttributeError — waarden gaan nu alleen naar BEDIENING-paneel
+        self.m_swr  = None
+        self.m_alc  = None
         self.m_vdd  = TxMeterBar("VDD",  _VDD)
         self.m_id   = TxMeterBar("ID",   _ID)
         self.m_comp = TxMeterBar("COMP", _CMP)
 
-        for meter in (self.m_swr, self.m_alc, self.m_vdd,
-                      self.m_id, self.m_comp):
+        for meter in (self.m_vdd, self.m_id, self.m_comp):
             v.addWidget(meter)
 
         v.addStretch()
@@ -1160,11 +1149,49 @@ class PowerPanel(QWidget):
     def set_power(self, pct: int):
         self.sld_power.setValue(max(5, min(100, pct)))
 
+    def _ptt_style_normal(self):
+        from .theme import BTN_NORMAL, BTN_HOVER, BORDER
+        self.btn_ptt.setStyleSheet(f"""
+            QPushButton {{
+                background: {BTN_NORMAL};
+                color: #888888;
+                border: 1px solid {BORDER};
+                border-radius: 3px;
+                font-size: 11pt;
+                font-weight: bold;
+                text-align: center;
+            }}
+            QPushButton:hover {{ background: {BTN_HOVER}; color: #AAAAAA; }}
+            QPushButton:pressed {{ background: #111; }}
+        """)
+
+    def set_tx_state(self, on: bool):
+        """Verander PTT-knop achtergrond: rood bij TX, normaal bij RX."""
+        btn = self.btn_ptt
+        btn.blockSignals(True)
+        btn.setChecked(on)
+        btn.blockSignals(False)
+        if on:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #7A0000;
+                    color: #FF4444;
+                    border: 2px solid #FF2020;
+                    border-radius: 3px;
+                    font-size: 11pt;
+                    font-weight: bold;
+                    text-align: center;
+                }
+                QPushButton:hover { background: #9A0000; }
+            """)
+        else:
+            self._ptt_style_normal()
+
     def set_swr(self, raw: int, text: str = ""):
-        self.m_swr.set_value(raw, text)
+        pass   # SWR staat in BEDIENING-paneel
 
     def set_alc(self, raw: int, text: str = ""):
-        self.m_alc.set_value(raw, text)
+        pass   # ALC staat in BEDIENING-paneel
 
     def set_vdd(self, raw: int, text: str = ""):
         self.m_vdd.set_value(raw, text)

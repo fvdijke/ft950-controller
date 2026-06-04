@@ -19,6 +19,7 @@ from PySide6.QtGui     import QFont, QPalette, QColor
 from PySide6.QtCore    import Qt
 
 from ft950.config     import load_config
+from ft950.i18n       import set_language
 from ft950.mainwindow import MainWindow
 
 
@@ -45,6 +46,7 @@ def main():
     app.setFont(QFont("Segoe UI", 8))
 
     cfg = load_config()
+    set_language(getattr(cfg, "ui_language", "nl"))
     win = MainWindow(cfg)
     win.show()
 

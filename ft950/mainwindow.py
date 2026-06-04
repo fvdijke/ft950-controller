@@ -27,6 +27,7 @@ from .panels  import (CombinedLeftPanel, DspPanel, VfoPanel,
 from .dialogs import (CatSettingsDialog, MemoryDialog, FreqKeypadDialog,
                       FreqMemoryDialog, SMeterCalibDialog)
 from .config  import FreqEntry
+from .i18n    import tr
 
 
 _APP_QSS = f"""
@@ -134,29 +135,42 @@ class MainWindow(QMainWindow):
         mb = self.menuBar()
 
         # Radio
-        m_radio = mb.addMenu("Radio")
-        self._act_connect    = m_radio.addAction("Verbinden (F5)")
-        self._act_disconnect = m_radio.addAction("Verbreken")
+        m_radio = mb.addMenu(tr("Radio"))
+        self._act_connect    = m_radio.addAction(tr("Verbinden (F5)"))
+        self._act_disconnect = m_radio.addAction(tr("Verbreken"))
         m_radio.addSeparator()
-        m_radio.addAction("CAT Monitor…",     self._open_cat_log)
-        m_radio.addAction("Instellingen…",    self._open_settings)
+        m_radio.addAction(tr("CAT Monitor…"),     self._open_cat_log)
+        m_radio.addAction(tr("Instellingen…"),    self._open_settings)
         m_radio.addSeparator()
-        m_radio.addAction("Afsluiten",        self.close)
+        m_radio.addAction(tr("Afsluiten"),        self.close)
         self._act_connect.triggered.connect(self._do_connect)
         self._act_disconnect.triggered.connect(self._do_disconnect)
         self._act_disconnect.setEnabled(False)
 
         # Geheugen
-        m_mem = mb.addMenu("Geheugen")
-        m_mem.addAction("Frequentie-favorieten…", self._open_freq_memories)
+        m_mem = mb.addMenu(tr("Geheugen"))
+        m_mem.addAction(tr("Frequentie-favorieten…"), self._open_freq_memories)
         m_mem.addSeparator()
-        m_mem.addAction("Radio geheugenkanalen…", self._open_memories)
+        m_mem.addAction(tr("Radio geheugenkanalen…"), self._open_memories)
 
         # Weergave
-        m_view = mb.addMenu("Weergave")
-        m_view.addAction("Lettergrootte display…", self._open_display_fonts)
+        m_view = mb.addMenu(tr("Weergave"))
+        m_view.addAction(tr("Lettergrootte display…"), self._open_display_fonts)
         m_view.addSeparator()
-        m_view.addAction("S-meter kalibreren…",    self._open_smeter_calib)
+        m_view.addAction(tr("S-meter kalibreren…"),    self._open_smeter_calib)
+        m_view.addSeparator()
+
+        # Taal submenu
+        m_lang = m_view.addMenu("Taal / Language")
+        act_nl = m_lang.addAction("Nederlands")
+        act_en = m_lang.addAction("English")
+        act_nl.setCheckable(True)
+        act_en.setCheckable(True)
+        from .i18n import get_language
+        act_nl.setChecked(get_language() == "nl")
+        act_en.setChecked(get_language() == "en")
+        act_nl.triggered.connect(lambda: self._set_language("nl", act_nl, act_en))
+        act_en.triggered.connect(lambda: self._set_language("en", act_nl, act_en))
 
         # Help
         m_help = mb.addMenu("Help")
@@ -200,39 +214,42 @@ class MainWindow(QMainWindow):
         # 1+2. BEDIENING (CombinedLeftPanel)
         self._left = CombinedLeftPanel()
         self._mode_panel = self._left
-        main.addWidget(self._col("BEDIENING", self._left))
+        main.addWidget(self._col(tr("BEDIENING"), self._left))
         main.addWidget(_vsep())
 
         # DSP FILTER
         self._dsp_panel = DspPanel()
-        main.addWidget(self._col("DSP FILTER", self._dsp_panel))
+        main.addWidget(self._col(tr("DSP FILTER"), self._dsp_panel))
         main.addWidget(_vsep())
 
         # DISPLAY (strekt)
-        self._display = DisplayPanel()
+        self._display = DisplayPanel(
+            vfob_font=self._cfg.vfob_font,
+            clar_font=self._cfg.clar_font,
+        )
         self._display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        main.addWidget(self._col("DISPLAY", self._display), 1)
+        main.addWidget(self._col(tr("DISPLAY"), self._display), 1)
         main.addWidget(_vsep())
 
         # VFO
         self._vfo = VfoPanel()
-        main.addWidget(self._col("VFO", self._vfo))
+        main.addWidget(self._col(tr("VFO"), self._vfo))
         main.addWidget(_vsep())
 
         # ONTVANGER
         self._right = RightPanel()
-        main.addWidget(self._col("ONTVANGER", self._right))
+        main.addWidget(self._col(tr("ONTVANGER"), self._right))
         main.addWidget(_vsep())
 
         # ZENDER
         self._power_panel = PowerPanel()
-        main.addWidget(self._col("ZENDER", self._power_panel))
+        main.addWidget(self._col(tr("ZENDER"), self._power_panel))
 
     def _build_statusbar(self):
         sb = self.statusBar()
 
         # Links: verbindingsstatus + frequentie + modus
-        self._sb_conn = QLabel("⬤  Niet verbonden")
+        self._sb_conn = QLabel(tr("⬤  Niet verbonden"))
         self._sb_conn.setStyleSheet(f"color:{TEXT_DIM}; font-size:7pt; padding:0 6px;")
         self._sb_freq = QLabel("")
         self._sb_freq.setStyleSheet(
@@ -325,6 +342,9 @@ class MainWindow(QMainWindow):
         self._vfo.sig_qmb_rcl.connect(
             lambda: self._cat.send_raw("QR;") if self._cat.connected else None)
 
+        # VFO-B afstemming via scrollwiel
+        self._display.sig_freq_b_changed.connect(self._on_freq_b_changed)
+
         # Band/mode
         # Band/mode: alleen vanuit het DisplayPanel (BandModePanel verwijderd)
 
@@ -366,6 +386,8 @@ class MainWindow(QMainWindow):
         self._cat.on_smeter    = lambda v:     self._meter_queue.put(("smeter", v))
         self._cat.on_busy      = lambda b:     self._meter_queue.put(("busy",   b))
         self._cat.on_tx_meters = lambda d:     self._meter_queue.put(("tx", d))
+        self._cat.on_tx_state  = lambda b:     self._meter_queue.put(("tx_state", b))
+        self._cat.on_freq_b    = lambda hz:    self._state_queue.put({"freq_b": hz})
         self._cat.on_agc       = lambda a:     self._meter_queue.put(("agc", a))
         self._cat.on_af_gain   = lambda v:     self._meter_queue.put(("af", v))
         self._cat.on_rf_gain   = lambda v:     self._meter_queue.put(("rf", v))
@@ -416,6 +438,8 @@ class MainWindow(QMainWindow):
                     self._sb_freq.setText(f"{hz / 1_000_000:.6f} MHz")
             elif "mode" in last_state:
                 self._apply_mode(last_state["mode"])
+            elif "freq_b" in last_state:
+                self._display.set_freq_b(last_state["freq_b"])
 
         # ── Meter-queue (smeter / tx-meters / agc) ────────────────────────────
         while not self._meter_queue.empty():
@@ -428,6 +452,8 @@ class MainWindow(QMainWindow):
                     self._display.set_busy(payload)
                 elif kind == "tx":
                     self._update_tx_meters(payload)
+                elif kind == "tx_state":
+                    self._set_tx_active(payload, from_meter=True)
                 elif kind == "agc":
                     AGC_IDX = {"OFF":0,"FAST":1,"MID":2,"SLOW":3,
                                "AUTO":4,"A-FAST":4,"A-MID":4,"A-SLOW":4}
@@ -457,12 +483,12 @@ class MainWindow(QMainWindow):
         self._left.set_power(connected)
 
         if connected:
-            self._sb_conn.setText("⬤  Verbonden")
+            self._sb_conn.setText(tr("⬤  Verbonden"))
             self._sb_conn.setStyleSheet(f"color:{LED_GREEN}; font-size:7pt; padding:0 6px;")
             self._act_connect.setEnabled(False)
             self._act_disconnect.setEnabled(True)
         else:
-            self._sb_conn.setText("⬤  Niet verbonden")
+            self._sb_conn.setText(tr("⬤  Niet verbonden"))
             self._sb_conn.setStyleSheet(f"color:{TEXT_DIM}; font-size:7pt; padding:0 6px;")
             self._act_connect.setEnabled(True)
             self._act_disconnect.setEnabled(False)
@@ -478,17 +504,53 @@ class MainWindow(QMainWindow):
 
     # ── Knoppen ───────────────────────────────────────────────────────────────
 
+    def _set_tx_active(self, on: bool, from_meter: bool = False):
+        """Centrale TX-schakelaar: badge (knipperend), ON AIR-knop, display.
+
+        from_meter=True: aanroep vanuit TX-meter poll (hardware PTT).
+        from_meter=False: aanroep vanuit GUI-knop.
+        GUI-initiated TX wordt niet overschreven door meter-detectie.
+        """
+        if from_meter and getattr(self, "_ptt_from_gui", False):
+            return  # GUI heeft prioriteit over meter-detectie
+
+        self._power_panel.set_tx_state(on)
+        if on:
+            self._display._badge_busy.set_active(False)
+            self._tx_blink_state = True
+            self._display._badge_tx.set_active(True)
+            if not hasattr(self, "_tx_blink_timer"):
+                self._tx_blink_timer = QTimer(self)
+                self._tx_blink_timer.timeout.connect(self._blink_tx)
+            self._tx_blink_timer.start(400)
+        else:
+            if hasattr(self, "_tx_blink_timer"):
+                self._tx_blink_timer.stop()
+            self._display._badge_tx.set_active(False)
+
+    def _blink_tx(self):
+        self._tx_blink_state = not self._tx_blink_state
+        self._display._badge_tx.set_active(self._tx_blink_state)
+
+    def _on_freq_b_changed(self, hz: int):
+        """VFO-B gewijzigd via scrollwiel → stuur FB; naar radio."""
+        if self._cat.connected:
+            self._cat.set_freq_b(hz)
+
     def _on_mox(self, on: bool):
+        self._ptt_from_gui = on
         if self._cat.connected:
             self._cat.set_ptt(on)
-        self._display.set_tx(on)
-        self._power_panel.btn_ptt.setChecked(on)
+        self._set_tx_active(on)
 
     def _on_ptt(self, on: bool):
+        self._ptt_from_gui = on
         if self._cat.connected:
             self._cat.set_ptt(on)
-        self._display.set_tx(on)
+        self._set_tx_active(on)
+        self._left.btn_mox.blockSignals(True)
         self._left.btn_mox.setChecked(on)
+        self._left.btn_mox.blockSignals(False)
 
     def _on_tune(self, state: int):
         if self._cat.connected:
@@ -707,6 +769,8 @@ class MainWindow(QMainWindow):
         alc_raw = tx.get("alc") or 0
         alc_pct = int(alc_raw / 255 * 100) if alc_raw else 0
         pp.set_alc(alc_raw, f"{alc_pct} %" if alc_raw else "—")
+        # ALC ook in BEDIENING-paneel
+        self._left.set_alc(alc_raw)
 
         vdd_raw = tx.get("vdd") or 0
         # VDD: raw 0-255 → 0–16 V  (nominaal 13.8 V ≈ raw ~220)
@@ -734,9 +798,9 @@ class MainWindow(QMainWindow):
     def _do_connect(self):
         ok, msg = self._cat.connect()
         if not ok:
-            QMessageBox.warning(self, "Verbinding mislukt",
-                                f"Kan niet verbinden:\n{msg}\n\n"
-                                "Controleer de CAT-instellingen (Radio → Instellingen…)")
+            QMessageBox.warning(self, tr("Verbinding mislukt"),
+                                f"Cannot connect:\n{msg}\n\n"
+                                "Check CAT settings (Radio → Settings…)")
 
     def _do_disconnect(self):
         self._cat.disconnect()
@@ -867,7 +931,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                                        QLabel, QSpinBox, QPushButton, QGroupBox)
         dlg = QDialog(self)
-        dlg.setWindowTitle("Lettergrootte display")
+        dlg.setWindowTitle(tr("Lettergrootte display"))
         dlg.setFixedWidth(320)
         from .dialogs import _QSS_DIALOG
         dlg.setStyleSheet(_QSS_DIALOG)
@@ -876,48 +940,69 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(14, 14, 14, 14)
         root.setSpacing(10)
 
-        grp = QGroupBox("Lettergroottes (punten)")
-        grp.setStyleSheet("QGroupBox{color:#787878;font-size:7pt;border:1px solid #363636;"
-                          "border-radius:3px;margin-top:6px;padding:6px;}")
-        gl = QHBoxLayout(grp); gl.setSpacing(20)
-
-        # Band/mode knoppen — gebruik _spinbox() voor zichtbare + en − knoppen
+        _grp_style = ("QGroupBox{color:#787878;font-size:7pt;border:1px solid #363636;"
+                      "border-radius:3px;margin-top:6px;padding:6px;}")
         from .dialogs import _spinbox as _spn
+
+        grp1 = QGroupBox(tr("VFO-A  /  Band & mode knoppen"))
+        grp1.setStyleSheet(_grp_style)
+        gl1 = QHBoxLayout(grp1); gl1.setSpacing(20)
+
         bc = QVBoxLayout()
-        bc.addWidget(QLabel("Band / mode knoppen:"))
+        bc.addWidget(QLabel(tr("Band/mode knoppen:")))
         spn_btn = _spn(5, 14, self._cfg.band_btn_font, " pt")
         spn_btn.valueChanged.connect(lambda v: self._display.set_btn_font(v))
         bc.addWidget(spn_btn)
-        gl.addLayout(bc)
+        gl1.addLayout(bc)
 
-        # VFD frequentie
         vc = QVBoxLayout()
-        vc.addWidget(QLabel("Frequentie (VFD):"))
+        vc.addWidget(QLabel(tr("Frequentie (VFD):")))
         spn_vfd = _spn(18, 60, self._cfg.vfd_font, " pt")
         spn_vfd.valueChanged.connect(lambda v: self._display.set_vfd_font(v))
         vc.addWidget(spn_vfd)
-        gl.addLayout(vc)
+        gl1.addLayout(vc)
+        root.addWidget(grp1)
 
-        root.addWidget(grp)
+        grp2 = QGroupBox("VFO-B  /  CLAR")
+        grp2.setStyleSheet(_grp_style)
+        gl2 = QHBoxLayout(grp2); gl2.setSpacing(20)
+
+        vb = QVBoxLayout()
+        vb.addWidget(QLabel(tr("VFO-B:")))
+        spn_vfob = _spn(8, 28, self._cfg.vfob_font, " pt")
+        spn_vfob.valueChanged.connect(lambda v: self._display._vfd_b.set_font_size(v))
+        vb.addWidget(spn_vfob)
+        gl2.addLayout(vb)
+
+        cc = QVBoxLayout()
+        cc.addWidget(QLabel(tr("CLAR:")))
+        spn_clar = _spn(8, 28, self._cfg.clar_font, " pt")
+        spn_clar.valueChanged.connect(lambda v: self._display._vfd_clar.set_font_size(v))
+        cc.addWidget(spn_clar)
+        gl2.addLayout(cc)
+        root.addWidget(grp2)
 
         btn_row = QHBoxLayout()
-        btn_ok  = QPushButton("Opslaan")
-        btn_ok.setStyleSheet(f"background:#C8A430;color:#000;font-weight:bold;"
-                             f"border-radius:2px;padding:4px 12px;")
-        btn_can = QPushButton("Annuleer")
-        btn_can.setStyleSheet(f"background:#2A2A2A;color:#DCDCDC;"
-                              f"border:1px solid #363636;border-radius:2px;padding:4px 12px;")
+        btn_ok  = QPushButton(tr("Opslaan"))
+        btn_ok.setStyleSheet("background:#C8A430;color:#000;font-weight:bold;"
+                             "border-radius:2px;padding:4px 12px;")
+        btn_can = QPushButton(tr("Annuleren"))
+        btn_can.setStyleSheet("background:#2A2A2A;color:#DCDCDC;"
+                              "border:1px solid #363636;border-radius:2px;padding:4px 12px;")
 
         def _save():
             self._cfg.band_btn_font = spn_btn.value()
             self._cfg.vfd_font      = spn_vfd.value()
+            self._cfg.vfob_font     = spn_vfob.value()
+            self._cfg.clar_font     = spn_clar.value()
             save_config(self._cfg)
             dlg.accept()
 
         def _cancel():
-            # Herstel oorspronkelijke waarden
             self._display.set_btn_font(self._cfg.band_btn_font)
             self._display.set_vfd_font(self._cfg.vfd_font)
+            self._display._vfd_b.set_font_size(self._cfg.vfob_font)
+            self._display._vfd_clar.set_font_size(self._cfg.clar_font)
             dlg.reject()
 
         btn_ok.clicked.connect(_save)
@@ -951,14 +1036,29 @@ class MainWindow(QMainWindow):
             "(Radio → Instellingen… → knop 'Verbind en test')"
         )
 
+    def _set_language(self, lang: str, act_nl, act_en):
+        from .i18n import set_language
+        from .config import save_config
+        set_language(lang)
+        self._cfg.ui_language = lang
+        save_config(self._cfg)
+        act_nl.setChecked(lang == "nl")
+        act_en.setChecked(lang == "en")
+        QMessageBox.information(
+            self,
+            "Taal / Language",
+            "Herstart de applicatie om de taal te wijzigen.\n\n"
+            "Restart the application to change the language."
+        )
+
     def _show_about(self):
         QMessageBox.about(
-            self, "Over FT-950 Controller",
+            self, "About FT-950 Controller",
             "<b>Yaesu FT-950 Controller</b><br>"
-            "Versie 1.0<br><br>"
-            "CAT-besturing via seriële poort conform<br>"
+            "Version 1.1<br><br>"
+            "CAT control via serial port per<br>"
             "<i>FT-950 CAT Operation Reference Book</i><br><br>"
-            "Gebouwd met Python + PySide6"
+            "Built with Python + PySide6"
         )
 
     # ── Venster sluiten ───────────────────────────────────────────────────────

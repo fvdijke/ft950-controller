@@ -1,85 +1,100 @@
 # FT-950 Controller
 
-Een Python-gebaseerde besturingsapplicatie voor de **Yaesu FT-950** HF/50 MHz transceiver, gebouwd met PySide6.
+A Python-based control application for the **Yaesu FT-950** HF/50 MHz transceiver, built with PySide6.
 
-## Beschrijving
+## Description
 
-FT-950 Controller biedt een volledig grafische interface waarmee de radio via de CAT-interface (seriële poort) bestuurd kan worden. De lay-out is geïnspireerd op het frontpaneel van de echte FT-950.
+FT-950 Controller provides a full graphical interface for controlling the radio via the CAT interface (serial port). The layout is inspired by the front panel of the real FT-950.
 
-### Mogelijkheden
+### Features
 
-- **Frequentie-afstemming** via klikbaar VFD-display (klik op een digit → selecteer stap, scrollwiel → afstemmen)
-- **Modus-selectie** (LSB, USB, CW, AM, FM, RTTY/PKT)
-- **Band-selectie** met directe frequentie-invoer via GEN-knop (keypad)
-- **VFO-A / VFO-B** beheer, split-operatie, FAST/LOCK
-- **DSP-filters**: IF Shift, IF Width, Contour, Notch (met sliders per functie)
-- **Ontvanger**: ATT, IPO, R.FLT, NB, DNR, AF Gain, RF Gain, Squelch
-- **Zender**: TX Power, MOX/PTT, MUTE met knipperend indicatie-lampje
-- **S-meter** met kalibratie-dialoog en schaalverdeling (S1…S9…+60 dB)
-- **TX-meters**: SWR, ALC, VDD, ID, COMP — allen met schaalverdeling
-- **Frequentie-favorieten** (opslaan/laden/bewerken met alle radio-instellingen)
-- **EIBI-kortegolflijst**: importeren vanuit lokaal bestand of direct van eibispace.de; klikken op een regel stelt de radio in
-- **Radio-geheugenkanalen** (lezen/schrijven/opslaan naar JSON)
-- **AGC-modus** zichtbaar op de knop, bijgewerkt vanuit de radio
-- **CAT-monitor** met verbindingstest (ID;-commando)
-- **UTC en EST-klok** in de statusbalk
-- **Statusbadges** (TX, BUSY, NAR, SPLIT, NB, DNR, FAST, LOCK) in de statusbalk
-- **S-meter kalibratie** per S-punt instelbaar
-- **Weergave-instellingen**: lettergrootte band/mode-knoppen en VFD instelbaar
-- Alle instellingen worden bewaard in JSON-configuratiebestanden
+- **Frequency tuning** via clickable VFD display — hover over a digit to select it, then use the scroll wheel to tune
+- **Mode selection** (LSB, USB, CW, AM, FM, RTTY/PKT)
+- **Band selection** with direct frequency entry via GEN button (keypad)
+- **VFO-A / VFO-B** management — both tunable via scroll wheel, split operation, FAST/LOCK
+- **DSP filters**: IF Shift, IF Width, Contour, Notch (sliders per function)
+- **Receiver**: ATT, IPO, R.FLT, NB, DNR, AF Gain, RF Gain, Squelch
+- **Transmitter**: TX Power, MOX/PTT, ON AIR button (turns red while transmitting)
+- **S-meter** with calibration dialog and scale (S1…S9…+60 dB)
+- **TX meters**: SWR, ALC, VDD, ID, COMP — all with scale markings
+- **TX detection** from hardware PTT via SWR meter (RM6) — ON AIR button and TX badge reflect actual radio TX state
+- **Frequency favourites** (save/load/edit with all radio settings per entry)
+- **EIBI shortwave list**: import from local file or directly from eibispace.de; click a row to tune the radio
+- **Radio memory channels** (read/write/save to JSON)
+- **AGC mode** shown on button, updated from radio
+- **CAT monitor** with connection test (ID; command)
+- **UTC and CEST clock** in the status bar
+- **Status badges** (TX, BUSY, NAR, SPLIT, NB, DNR, FAST, LOCK) in the status bar — TX badge blinks while transmitting
+- **S-meter calibration** — configurable raw value per S-point
+- **Display settings**: font size for band/mode buttons, VFD, VFO-B and CLAR individually adjustable
+- **Language selection**: English (default) and Dutch — switchable via View → Language, persisted across restarts
+- All settings are stored in JSON configuration files
 
-## Vereisten
+## Requirements
 
-- Python 3.10 of hoger
+- Python 3.10 or higher
 - PySide6 >= 6.4
 - pyserial >= 3.5
 
-Installeren:
+Install:
 ```bash
 pip install PySide6 pyserial
 ```
 
-## Starten
+## Getting Started
 
 ```bash
 cd FT950
 python ft950_controller.py
 ```
 
-## CAT-verbinding instellen
+## CAT Connection Setup
 
-1. Sluit de FT-950 aan via een seriële kabel op de CAT-ingang (9-pin DB9)
-2. Ga naar **Radio → Instellingen…**
-3. Stel COM-poort, baudrate (standaard 4800 bps) en overige seriële parameters in
-4. Klik **Verbind en test (ID;)** — de radio antwoordt met `ID0310;`
-5. Klik **Opslaan**
-6. Druk **F5** of klik de **⬤ Verbinden**-knop om te verbinden
+1. Connect the FT-950 via a serial cable to the CAT port (9-pin DB9)
+2. Go to **Radio → Settings…**
+3. Set the COM port, baud rate (default 4800 bps) and other serial parameters
+4. Click **Connect and test (ID;)** — the radio responds with `ID0310;`
+5. Click **Save**
+6. Press **F5** or click the **⬤ Connect** button to connect
 
-## Projectstructuur
+## Project Structure
 
 ```
 FT950/
-├── ft950_controller.py       # startpunt
+├── ft950_controller.py       # entry point
 ├── requirements.txt
-├── ft950_config.json         # instellingen (aangemaakt bij eerste start)
-├── ft950_memories.json       # frequentie-favorieten
-├── ft950_channels.json       # radio-geheugenkanalen
-├── ft950_eibi.json           # EIBI-kortegolflijst
+├── ft950_config.json         # settings (created on first run)
+├── ft950_memories.json       # frequency favourites
+├── ft950_channels.json       # radio memory channels
+├── ft950_eibi.json           # EIBI shortwave schedule
 └── ft950/
-    ├── theme.py              # kleurthema
-    ├── config.py             # configuratie-dataklassen + JSON-opslag
-    ├── cat.py                # CAT-communicatie (FT-950 specifiek)
-    ├── widgets.py            # VFD-display, S-meter, LED-knoppen, knob
-    ├── display.py            # frequentie-display paneel
-    ├── panels.py             # alle bedieningspanelen
-    ├── dialogs.py            # dialogen (CAT, geheugen, EIBI, kalibratie)
-    └── mainwindow.py         # hoofdvenster
+    ├── i18n.py               # internationalisation (NL/EN)
+    ├── theme.py              # colour theme
+    ├── config.py             # config dataclasses + JSON storage
+    ├── cat.py                # CAT communication (FT-950 specific)
+    ├── widgets.py            # VFD display, S-meter, LED buttons
+    ├── display.py            # frequency display panel
+    ├── panels.py             # all control panels
+    ├── dialogs.py            # dialogs (CAT, memory, EIBI, calibration)
+    └── mainwindow.py         # main window
 ```
 
-## Licentie
+## Keyboard Shortcuts
 
-MIT License — vrij te gebruiken en aan te passen.
+| Key | Action |
+|-----|--------|
+| F5  | Connect / Disconnect |
 
-## Auteur
+## Notes
 
-Ontwikkeld voor gebruik met de Yaesu FT-950 HF/50 MHz transceiver.
+- TX detection via hardware PTT uses the SWR meter (CAT command `RM6;`). The radio must be connected and transmitting into an antenna for the GUI to reflect TX state.
+- The EIBI import auto-detects the current schedule file URL from eibispace.de.
+- All favourites, EIBI notes and channel data are stored locally in JSON files.
+
+## License
+
+MIT License — free to use and modify.
+
+## Author
+
+Developed for use with the Yaesu FT-950 HF/50 MHz transceiver.

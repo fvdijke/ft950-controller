@@ -75,6 +75,8 @@ class Ft950Cat:
         self.on_state:      callable = None   # (state_dict)
         self.on_smeter:     callable = None   # (raw: int)
         self.on_tx_meters:  callable = None   # (dict: swr/alc/vdd/id/comp)
+        self.on_tx_state:   callable = None   # (is_tx: bool) — elke cyclus via SWR
+        self.on_freq_b:     callable = None   # (hz: int) VFO-B frequentie
         self.on_agc:        callable = None   # (label: str)
         self.on_af_gain:    callable = None   # (val: int 0-255)
         self.on_rf_gain:    callable = None   # (val: int 0-255)
@@ -187,6 +189,15 @@ class Ft950Cat:
                         self._notify_status(False)
                         break
 
+                # ── TX-detectie via SWR (RM6) — elke ronde ─────────────────
+                # Tijdens RX is SWR altijd 0; elke waarde > 0 = radio zendt
+                swr_tx = self.read_meter(6)
+                # SWR raw > 5 ≈ SWR > 1.04 — pakt elk realistisch antennesysteem
+                is_tx_now = (swr_tx or 0) > 5
+                if self.on_tx_state:
+                    try: self.on_tx_state(is_tx_now)
+                    except Exception: pass
+
                 # ── SM; → S-meter (elke 2e ronde) ────────────────────────────
                 if cycle % 2 == 0:
                     sm = self.read_smeter()
@@ -196,6 +207,13 @@ class Ft950Cat:
                     busy = self.read_busy()
                     if busy is not None and self.on_busy:
                         try: self.on_busy(busy)
+                        except Exception: pass
+
+                # ── VFO-B frequentie (elke 3e ronde) ─────────────────────────
+                if cycle % 3 == 0:
+                    fb = self.get_freq_b()
+                    if fb and self.on_freq_b:
+                        try: self.on_freq_b(fb)
                         except Exception: pass
 
                 # ── TX-meters (elke 4e ronde) ─────────────────────────────────

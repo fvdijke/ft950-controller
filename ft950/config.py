@@ -221,6 +221,11 @@ class Ft950Config:
     # ── Weergave-lettergroottes ───────────────────────────────────────────────────
     band_btn_font:  int  = 7    # pt  band/mode knoppen in het display
     vfd_font:       int  = 34   # pt  grote frequentie-aanduiding
+    vfob_font:      int  = 14   # pt  VFO-B display
+    clar_font:      int  = 14   # pt  CLAR display
+
+    # ── Taal ─────────────────────────────────────────────────────────────────
+    ui_language:    str  = "en"  # "nl" of "en"
 
 
 def load_config() -> Ft950Config:

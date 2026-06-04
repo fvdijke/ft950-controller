@@ -53,11 +53,13 @@ class VfdDisplay(QWidget):
         self._freq_hz       = 14_195_000
         self._font_sz       = font_size
         self._selected_char = 5          # default: 1 kHz digit
+        self._hovered       = False      # muis zweeft erover
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.WheelFocus)
+        self.setMouseTracking(True)
 
         fm = QFontMetrics(QFont("Consolas", font_size, QFont.Bold))
         self.setMinimumHeight(fm.height() + 32)
@@ -82,7 +84,20 @@ class VfdDisplay(QWidget):
 
     # ── Muis-events ───────────────────────────────────────────────────────────
 
+    def enterEvent(self, event):
+        self._hovered = True
+        self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px; "
+                           f"border: 1px solid {ACCENT};")
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
+        self.update()
+
     def mousePressEvent(self, event):
+        if not self._hovered:
+            return
         if event.button() == Qt.LeftButton:
             x = event.position().x()
             x_start, char_w = self._string_start_and_charwidth()
@@ -95,6 +110,9 @@ class VfdDisplay(QWidget):
                         self.update()
 
     def wheelEvent(self, event):
+        if not self._hovered:
+            event.ignore()
+            return
         delta = 1 if event.angleDelta().y() > 0 else -1
         self.increment(delta)
         event.accept()
@@ -143,12 +161,11 @@ class VfdDisplay(QWidget):
             p.setPen(QColor(VFD_OFF))
             p.drawText(int(x_start + i * char_w), y_base, gc)
 
-        # 2. Echte tekens, geselecteerde digit in amber met highlight
+        # 2. Echte tekens; digit-highlight alleen bij hover
         for i, c in enumerate(s):
             x    = int(x_start + i * char_w)
-            step = self._DIGIT_STEPS[i] if i < len(self._DIGIT_STEPS) else None
 
-            if i == self._selected_char:
+            if self._hovered and i == self._selected_char:
                 # Highlight-blokje achter geselecteerde digit
                 box_top = y_base - fm.ascent()
                 p.fillRect(x - 1, box_top, char_w + 2, fm.height(), QColor("#1A1400"))
@@ -287,53 +304,138 @@ class TuningKnob(QWidget):
 # ── Small VFD (voor VFO-B / clarifier) ───────────────────────────────────────
 
 class SmallVfd(QWidget):
-    """Compacte frequentieweergave voor VFO-B / Clarifier offset."""
+    """
+    Compacte interactieve frequentieweergave voor VFO-B.
 
-    def __init__(self, label="VFO-B", parent=None):
+    • Klik op een digit → selecteer (amber onderstreept)
+    • Scrollwiel → afstemmen op geselecteerde stap
+    • sig_freq_changed wordt geëmit bij elke wijziging (alleen als interactive=True)
+    """
+
+    sig_freq_changed = Signal(int)
+
+    _DIGIT_STEPS = [10_000_000, 1_000_000, None,
+                    100_000, 10_000, 1_000, None,
+                    100, 10, 1]
+
+    def __init__(self, label="VFO-B", interactive: bool = False,
+                 font_size: int = 14, parent=None):
         super().__init__(parent)
-        self._label   = label
-        self._freq_hz = 0
-        self._color   = VFD_DIM
-        self.setFixedHeight(38)
+        self._label       = label
+        self._freq_hz     = 0
+        self._color       = VFD_DIM
+        self._interactive = interactive
+        self._selected    = 5        # standaard 1 kHz digit
+        self._hovered     = False
+        self._font_sz     = font_size
+        h = max(28, font_size * 2 + 10)
+        self.setFixedHeight(h)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px;")
+        if interactive:
+            self.setCursor(Qt.PointingHandCursor)
+            self.setFocusPolicy(Qt.WheelFocus)
+            self.setMouseTracking(True)
 
     def set_freq(self, hz: int, color: str | None = None):
-        self._freq_hz = hz
+        self._freq_hz = max(0, int(hz))
         if color:
             self._color = color
         self.update()
+
+    def set_font_size(self, pt: int):
+        self._font_sz = max(8, min(28, pt))
+        h = max(28, self._font_sz * 2 + 10)
+        self.setFixedHeight(h)
+        self.update()
+
+    def _freq_str(self) -> str:
+        hz = self._freq_hz
+        if hz == 0:
+            return "--.--.---"
+        mhz = hz // 1_000_000
+        khz = (hz % 1_000_000) // 1_000
+        hzr = hz % 1_000
+        return f"{mhz:2d}.{khz:03d}.{hzr:03d}"
+
+    def _char_metrics(self):
+        font = QFont("Consolas", self._font_sz, QFont.Bold)
+        fm   = QFontMetrics(font)
+        s    = "88.888.888"
+        total = fm.horizontalAdvance(s)
+        x0    = (self.width() - total) // 2
+        cw    = fm.horizontalAdvance("0")
+        return font, fm, x0, cw
+
+    def enterEvent(self, event):
+        if self._interactive:
+            self._hovered = True
+            self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px; "
+                               f"border: 1px solid {ACCENT};")
+            self.update()
+
+    def leaveEvent(self, event):
+        if self._interactive:
+            self._hovered = False
+            self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px;")
+            self.update()
+
+    def mousePressEvent(self, event):
+        if not self._interactive or not self._hovered:
+            return
+        if event.button() != Qt.LeftButton:
+            return
+        _, _, x0, cw = self._char_metrics()
+        rel = event.position().x() - x0
+        if rel >= 0:
+            idx = int(rel // cw)
+            if 0 <= idx < len(self._DIGIT_STEPS) and self._DIGIT_STEPS[idx] is not None:
+                self._selected = idx
+                self.update()
+
+    def wheelEvent(self, event):
+        if not self._interactive or not self._hovered or self._freq_hz == 0:
+            event.ignore()
+            return
+        step  = self._DIGIT_STEPS[self._selected] or 1_000
+        delta = 1 if event.angleDelta().y() > 0 else -1
+        new   = max(30_000, min(56_000_000, self._freq_hz + delta * step))
+        self._freq_hz = new
+        self.update()
+        self.sig_freq_changed.emit(new)
+        event.accept()
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.fillRect(self.rect(), QColor(BG_DISPLAY))
 
-        hz = self._freq_hz
-        if hz == 0:
-            text  = "--.--.---"
-            ghost = "88.888.888"
-        else:
-            mhz  = hz // 1_000_000
-            khz  = (hz % 1_000_000) // 1_000
-            hz_r = hz % 1_000
-            text  = f"{mhz:2d}.{khz:03d}.{hz_r:03d}"
-            ghost = "88.888.888"
+        font, fm, xr, cw = self._char_metrics()
+        text  = self._freq_str()
+        ghost = "88.888.888"
 
-        font = QFont("Consolas", 14, QFont.Bold)
-        p.setFont(font)
-        fm   = QFontMetrics(font)
-
-        # Verticaal centreren
         y_base = (self.height() - fm.height()) // 2 + fm.ascent()
         y_base = max(fm.ascent() + 2, y_base)
 
-        p.setPen(QColor(VFD_OFF))
-        xg = (self.width() - fm.horizontalAdvance(ghost)) // 2
-        p.drawText(xg, y_base, ghost)
+        p.setFont(font)
 
-        p.setPen(QColor(self._color))
-        xr = (self.width() - fm.horizontalAdvance(text)) // 2
-        p.drawText(xr, y_base, text)
+        # 1. Ghost (VFD_OFF) per karakter
+        for i, gc in enumerate(ghost):
+            p.setPen(QColor(VFD_OFF))
+            p.drawText(int(xr + i * cw), y_base, gc)
+
+        # 2. Echte tekens per karakter — geselecteerde digit bij hover in amber
+        hovering = self._interactive and self._hovered and self._freq_hz > 0
+        for i, c in enumerate(text):
+            x = int(xr + i * cw)
+            if hovering and i == self._selected:
+                # achtergrondblokje
+                p.fillRect(x, 2, int(cw), self.height() - 4, QColor(ACCENT + "33"))
+                p.setPen(QColor(ACCENT))
+            elif c == '.':
+                p.setPen(QColor(VFD_OFF))
+            else:
+                p.setPen(QColor(VFD_DIM))
+            p.drawText(x, y_base, c)
 
         lbl_font = QFont("Segoe UI", 6)
         p.setFont(lbl_font)

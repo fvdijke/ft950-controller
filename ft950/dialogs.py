@@ -22,6 +22,7 @@ from .cat    import list_ports, MODE_CODES
 from .config import (FreqEntry, load_memories, save_memories,
                      EibiRecord, load_eibi_records, save_eibi_records,
                      load_channels, save_channels)
+from .i18n   import tr
 
 
 _QSS_DIALOG = f"""
@@ -156,7 +157,7 @@ class CatSettingsDialog(QDialog):
         super().__init__(parent)
         self._cfg = cfg
         self._cat = cat
-        self.setWindowTitle("CAT / Seriële poort instellingen")
+        self.setWindowTitle(tr("CAT Instellingen"))
         self.setMinimumWidth(440)
         self.setStyleSheet(_QSS_DIALOG)
         self._build()
@@ -229,7 +230,7 @@ class CatSettingsDialog(QDialog):
         root.addWidget(grp_poll)
 
         # ── Test-status ───────────────────────────────────────────────────────
-        self._status_lbl = QLabel("Niet verbonden")
+        self._status_lbl = QLabel(tr("Niet verbonden"))
         self._status_lbl.setStyleSheet(f"color:{TEXT_DIM}; font-size:8pt;")
         root.addWidget(self._status_lbl)
 
@@ -239,10 +240,10 @@ class CatSettingsDialog(QDialog):
         btn_test = QPushButton("Verbind en test (ID;)")
         btn_test.setObjectName("test")
         btn_test.clicked.connect(self._do_test)
-        btn_ok     = QPushButton("Opslaan")
+        btn_ok     = QPushButton(tr("Opslaan"))
         btn_ok.setObjectName("ok")
         btn_ok.clicked.connect(self._do_save)
-        btn_cancel = QPushButton("Annuleer")
+        btn_cancel = QPushButton(tr("Annuleer"))
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_test)
         btn_row.addStretch()
@@ -296,13 +297,13 @@ class CatSettingsDialog(QDialog):
         if ok:
             ok2, resp = self._cat.identify()
             if ok2:
-                self._status_lbl.setText(f"✔  Verbonden — antwoord: {resp}")
+                self._status_lbl.setText(f"✔  Connected — response: {resp}")
                 self._status_lbl.setStyleSheet(f"color:{LED_GREEN}; font-size:8pt;")
             else:
-                self._status_lbl.setText(f"✔  Verbonden maar ID mislukt: {resp}")
+                self._status_lbl.setText(f"✔  Connected but ID failed: {resp}")
                 self._status_lbl.setStyleSheet(f"color:#FFAA00; font-size:8pt;")
         else:
-            self._status_lbl.setText(f"✘  Verbinding mislukt: {msg}")
+            self._status_lbl.setText(f"✘  Connection failed: {msg}")
             self._status_lbl.setStyleSheet(f"color:{LED_RED}; font-size:8pt;")
 
     def _do_save(self):
@@ -323,7 +324,7 @@ class MemoryDialog(QDialog):
         super().__init__(parent)
         self._cat  = cat
         self._data: dict[int, dict] = load_channels()   # laad opgeslagen kanalen
-        self.setWindowTitle("FT-950 — Geheugenkanalen")
+        self.setWindowTitle(tr("Geheugen") + " — FT-950")
         self.resize(700, 520)
         self.setStyleSheet(_QSS_DIALOG)
         self._build()
@@ -344,9 +345,9 @@ class MemoryDialog(QDialog):
         btn_read_all.clicked.connect(self._read_all)
         btn_write    = QPushButton("Geselecteerde → radio")
         btn_write.clicked.connect(self._write_selected)
-        btn_recall   = QPushButton("Oproepen op radio")
+        btn_recall   = QPushButton(tr("Oproepen op radio"))
         btn_recall.clicked.connect(self._recall_selected)
-        self.btn_save = QPushButton("💾 Bewaren")
+        self.btn_save = QPushButton(tr("💾 Bewaren"))
         self.btn_save.setObjectName("ok")
         self.btn_save.clicked.connect(self._do_save)
         tb.addWidget(btn_read_all)
@@ -417,7 +418,7 @@ class MemoryDialog(QDialog):
         root.addWidget(edit_grp)
 
         # Sluiten
-        btn_close = QPushButton("Sluiten")
+        btn_close = QPushButton(tr("Sluiten"))
         btn_close.clicked.connect(self.accept)
         root.addWidget(btn_close, alignment=Qt.AlignRight)
 
@@ -433,14 +434,14 @@ class MemoryDialog(QDialog):
         """Sla alle ingevulde kanalen op naar ft950_channels.json."""
         save_channels(self._data)
         self._set_status(
-            f"{len(self._data)} kanalen opgeslagen in ft950_channels.json",
+            f"{len(self._data)} channels saved to ft950_channels.json",
             LED_GREEN)
 
     def _read_all(self):
         if not self._cat.connected:
-            self._set_status("Niet verbonden met radio.", LED_RED)
+            self._set_status(tr("Niet verbonden met radio."), LED_RED)
             return
-        self._set_status("Bezig met inlezen…")
+        self._set_status("Reading…")
         count = 0
         for ch in range(100):
             data = self._cat.get_memory(ch)
@@ -448,7 +449,7 @@ class MemoryDialog(QDialog):
                 self._data[ch] = data
                 self._fill_row(ch, data)
                 count += 1
-        self._set_status(f"{count} kanalen ingelezen.  Klik '💾 Bewaren' om op te slaan.",
+        self._set_status(f"{count} channels read.  Click '💾 Save' to store.",
                          LED_GREEN)
 
     def _fill_row(self, ch: int, data: dict):
@@ -475,10 +476,10 @@ class MemoryDialog(QDialog):
     def _write_selected(self):
         rows = sorted({idx.row() for idx in self._tbl.selectedIndexes()})
         if not rows:
-            self._set_status("Geen rijen geselecteerd.")
+            self._set_status("No rows selected.")
             return
         if not self._cat.connected:
-            self._set_status("Niet verbonden.", LED_RED)
+            self._set_status(tr("Niet verbonden."), LED_RED)
             return
         for row in rows:
             freq_item = self._tbl.item(row, 1)
@@ -494,7 +495,7 @@ class MemoryDialog(QDialog):
             shift = {"S": "S", "+": "+", "-": "-"}.get(
                 (shift_item.text() if shift_item else "S"), "S")
             self._cat.set_memory(row, freq, mode, shift)
-        self._set_status(f"{len(rows)} kanaal/kanalen verzonden.", LED_GREEN)
+        self._set_status(f"{len(rows)} channel(s) sent.", LED_GREEN)
 
     def _recall_selected(self):
         rows = {idx.row() for idx in self._tbl.selectedIndexes()}
@@ -503,26 +504,26 @@ class MemoryDialog(QDialog):
         ch = min(rows)
         if self._cat.connected:
             self._cat.recall_memory(ch)
-            self._set_status(f"Kanaal {ch} opgeroepen.", LED_GREEN)
+            self._set_status(f"Channel {ch} recalled.", LED_GREEN)
 
     def _write_one(self):
         ch = self.spn_ch.value()
         try:
             freq = int(self.edt_freq.text())
         except ValueError:
-            self._set_status("Ongeldige frequentie.", LED_RED)
+            self._set_status(tr("Ongeldige frequentie."), LED_RED)
             return
         mode  = self.cmb_mode.currentText()
         shift = {0: "S", 1: "+", 2: "-"}.get(self.cmb_shift.currentIndex(), "S")
         if not self._cat.connected:
-            self._set_status("Niet verbonden met radio — kanaal NIET naar radio gestuurd.", LED_RED)
+            self._set_status(tr("Niet verbonden met radio — kanaal NIET naar radio gestuurd."), LED_RED)
         else:
             ok = self._cat.set_memory(ch, freq, mode, shift)
             if ok:
-                self._set_status(f"Kanaal {ch} naar radio geschreven.", LED_GREEN)
+                self._set_status(f"Channel {ch} written to radio.", LED_GREEN)
             else:
-                self._set_status(f"Kanaal {ch}: radio antwoordde met fout (?). "
-                                 "Controleer verbinding en frequentiebereik.", LED_RED)
+                self._set_status(f"Channel {ch}: radio returned error. "
+                                 "Check connection and frequency range.", LED_RED)
         # Altijd lokaal bijwerken
         data = {"freq": freq, "mode": mode, "shift": shift, "tone": 0}
         self._data[ch] = data
@@ -542,11 +543,14 @@ class MemoryDialog(QDialog):
             self.cmb_mode.setCurrentIndex(idx)
         shift = data.get("shift", "S")
         self.cmb_shift.setCurrentIndex({"S": 0, "+": 1, "-": 2}.get(shift, 0))
-        # Stuur kanaal naar radio zodra er op geklikt wordt
+        # 30ms: genoeg voor Qt om de selectie te schilderen vóór serial-aanroep
         if self._cat.connected:
-            self._cat.recall_memory(row)
-            self._set_status(f"Kanaal {row} opgeroepen  ({data.get('freq',0)/1000:.1f} kHz  {mode})",
-                             LED_GREEN)
+            _row, _data, _mode = row, data, mode
+            QTimer.singleShot(30, lambda: (
+                self._cat.recall_memory(_row),
+                self._set_status(
+                    f"Channel {_row} recalled  ({_data.get('freq',0)/1000:.1f} kHz  {_mode})",
+                    LED_GREEN)))
 
 
 # ── Frequentie-favorieten ─────────────────────────────────────────────────────
@@ -601,21 +605,19 @@ class _EibiTab(QWidget):
         # Toolbar
         tb = QHBoxLayout(); tb.setSpacing(5)
         btn_import = QPushButton("📥 Importeer EIBI…"); btn_import.setObjectName("test")
-        btn_apply  = QPushButton("▶ Laden → radio");   btn_apply.setObjectName("ok")
-        btn_save   = QPushButton("💾 Bewaren")
+        btn_save   = QPushButton(tr("💾 Bewaren"))
         btn_clear  = QPushButton("✕ Alles wissen")
         btn_import.clicked.connect(self._do_import)
-        btn_apply.clicked.connect(self._do_apply_selected)
         btn_save.clicked.connect(self._do_save)
         btn_clear.clicked.connect(self._do_clear)
-        for w in (btn_import, btn_apply, btn_save, btn_clear):
+        for w in (btn_import, btn_save, btn_clear):
             tb.addWidget(w)
         tb.addStretch()
         v.addLayout(tb)
 
         # Zoekbalk
         sr = QHBoxLayout(); sr.setSpacing(4)
-        sr.addWidget(QLabel("Zoeken:"))
+        sr.addWidget(QLabel(tr("Zoeken:")))
         self._search = QLineEdit()
         self._search.setPlaceholderText("station, land of frequentie…")
         self._search.textChanged.connect(self._filter)
@@ -643,7 +645,6 @@ class _EibiTab(QWidget):
         self._tbl.setColumnWidth(9, 45);  self._tbl.setColumnWidth(10, 120)
         self._tbl.currentCellChanged.connect(
             lambda row, _c, _pr, _pc: self._row_selected(row))
-        self._tbl.doubleClicked.connect(lambda _: self._do_apply_selected())
         v.addWidget(self._tbl, 1)
 
         # Bewerk-strip (instellingen per record)
@@ -764,22 +765,11 @@ class _EibiTab(QWidget):
         self._chk_nar.setChecked(r.dsp_nar)
         self._cmb_width.setCurrentIndex(r.dsp_width_idx)
         self._edt_note.setText(r.notes)
-        # Stuur meteen naar radio (bij enkelvoudige klik)
+        # 30ms: genoeg voor Qt om de selectie te schilderen vóór serial-aanroep
         if self._apply_fn:
-            try: self._apply_fn(r)
-            except Exception: pass
+            QTimer.singleShot(30, lambda rec=r: self._apply_fn(rec))
 
     # ── Acties ─────────────────────────────────────────────────────────────
-
-    def _do_apply_selected(self):
-        """Dubbelklik of knop: stuur geselecteerde regel naar radio."""
-        row = self._selected
-        if row < 0: return
-        item = self._tbl.item(row, 0)
-        if item:
-            r = item.data(Qt.UserRole)
-            if isinstance(r, EibiRecord) and self._apply_fn:
-                self._apply_fn(r)
 
     def _save_edit(self):
         """Sla bewerk-strip op in het geselecteerde record."""
@@ -840,7 +830,7 @@ class FreqMemoryDialog(QDialog):
         self._cat          = cat
         self._apply_eibi   = apply_eibi_fn
         self._apply_fav    = apply_fav_fn   # callable(FreqEntry) → radio instellen
-        self.setWindowTitle("Frequentie-favorieten")
+        self.setWindowTitle(tr("Frequentie favorieten"))
         self.resize(1000, 620)
         self.setStyleSheet(_QSS_DIALOG)
         self._build()
@@ -865,7 +855,7 @@ class FreqMemoryDialog(QDialog):
 
         # Toolbar favorieten
         tb = QHBoxLayout(); tb.setSpacing(5)
-        self.btn_save   = QPushButton("⊕ Bewaar huidig");  self.btn_save.setObjectName("ok")
+        self.btn_save   = QPushButton("⊕ Save current");  self.btn_save.setObjectName("ok")
         self.btn_delete = QPushButton("✕ Verwijder")
         self.btn_up     = QPushButton("▲"); self.btn_up.setFixedWidth(28)
         self.btn_dn     = QPushButton("▼"); self.btn_dn.setFixedWidth(28)
@@ -996,7 +986,7 @@ class FreqMemoryDialog(QDialog):
 
         root.addWidget(self._tabs, 1)
 
-        btn_close = QPushButton("Sluiten")
+        btn_close = QPushButton(tr("Sluiten"))
         btn_close.clicked.connect(self.accept)
         root.addWidget(btn_close, alignment=Qt.AlignRight)
 
@@ -1027,10 +1017,10 @@ class FreqMemoryDialog(QDialog):
         if 0 <= row < len(self._entries):
             e = self._entries[row]
             self._load_entry_to_form(e)
-            # Stuur meteen naar radio (zelfde gedrag als EIBI-tab)
+            # Uitgesteld uitvoeren: Qt tekent de amber-selectie EERST,
+            # daarna pas de (blokkerende) seriële CAT-aanroepen
             if self._apply_fav:
-                try: self._apply_fav(e)
-                except Exception: pass
+                QTimer.singleShot(30, lambda entry=e: self._apply_fav(entry))
 
     def _load_entry_to_form(self, e: FreqEntry):
         self.edt_name.setText(e.name)
@@ -1175,7 +1165,7 @@ class EIBIImportDialog(QDialog):
         self._drain_timer = QTimer(self)
         self._drain_timer.timeout.connect(self._drain)
         self._drain_timer.start(40)   # drain elke 40 ms → vloeiende voortgang
-        self.setWindowTitle("EIBI-frequenties importeren")
+        self.setWindowTitle(tr("Importeren…"))
         self.resize(880, 540)
         self.setStyleSheet(_QSS_DIALOG)
         self._build()
@@ -1266,7 +1256,7 @@ class EIBIImportDialog(QDialog):
         lbl_sel = QLabel("Selecteer rijen (Ctrl+klik voor meerdere)")
         lbl_sel.setStyleSheet(f"color:{TEXT_DIM}; font-size:7pt;")
         btn_import = QPushButton("✓ Geselecteerde importeren"); btn_import.setObjectName("ok")
-        btn_cancel = QPushButton("Annuleer")
+        btn_cancel = QPushButton(tr("Annuleer"))
         btn_import.clicked.connect(self._do_import)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(lbl_sel); btn_row.addStretch()
@@ -1292,7 +1282,7 @@ class EIBIImportDialog(QDialog):
         season_hint = "a" if self._cmb_season.currentIndex() == 0 else "b"
         self._progress.setValue(0)
         self._progress.setRange(0, 0)          # onbepaald terwijl we zoeken
-        self._progress.setFormat("Zoeken naar actueel bestand…")
+        self._progress.setFormat("Searching for current file…")
         self._progress.setVisible(True)
         self._btn_dl.setEnabled(False)
         self._status.setText("Ophalen bestandslijst van eibispace.de…")
@@ -1429,11 +1419,11 @@ class EIBIImportDialog(QDialog):
         """Wordt aangeroepen in GUI-thread bij downloadfout."""
         self._progress.setRange(0, 100)
         self._progress.setValue(0)
-        self._progress.setFormat("Download mislukt  ✗")
+        self._progress.setFormat("Download failed  ✗")
         self._progress.setStyleSheet(self._progress.styleSheet().replace(
             "#4CAF50", "#EF5350").replace("#1A5A1A", "#5A1010"))
         self._btn_dl.setEnabled(True)
-        self._status.setText(f"Download mislukt: {msg}")
+        self._status.setText(f"Download failed: {msg}")
 
     def _parse_lines(self, lines: list[str], source: str = ""):
         """Verwerk een lijst van regels (string) als EIBI-data."""
@@ -1563,7 +1553,7 @@ class SMeterCalibDialog(QDialog):
         super().__init__(parent)
         self._smeter      = smeter_widget   # SMeterBar widget (live preview)
         self._current_raw = 0               # live ruwe waarde van radio
-        self.setWindowTitle("S-meter kalibratie")
+        self.setWindowTitle(tr("S-meter kalibratie"))
         self.setFixedWidth(460)
         self.setStyleSheet(_QSS_DIALOG)
         self._build(current_cal)
@@ -1622,8 +1612,8 @@ class SMeterCalibDialog(QDialog):
         # Knoppen
         btn_row = QHBoxLayout(); btn_row.setSpacing(8)
         btn_def  = QPushButton("Standaard herstellen")
-        btn_ok   = QPushButton("Opslaan"); btn_ok.setObjectName("ok")
-        btn_can  = QPushButton("Annuleer")
+        btn_ok   = QPushButton(tr("Opslaan")); btn_ok.setObjectName("ok")
+        btn_can  = QPushButton(tr("Annuleer"))
         btn_def.clicked.connect(self._reset_defaults)
         btn_ok.clicked.connect(self.accept)
         btn_can.clicked.connect(self.reject)
@@ -1762,7 +1752,7 @@ class FreqKeypadDialog(QDialog):
         super().__init__(parent)
         self._digits: list = []
         self._result_hz = current_hz
-        self.setWindowTitle("Frequentie invoeren")
+        self.setWindowTitle(tr("Frequentie invoeren"))
         self.setStyleSheet(f"QDialog, QWidget {{ background:{BG_PANEL}; }}" + _KP_BTN)
         self.setFixedSize(340, 430)
         self._build()
