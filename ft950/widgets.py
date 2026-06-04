@@ -10,9 +10,9 @@ Bevat:
 
 import math
 
-from PySide6.QtCore    import Qt, Signal, QSize
+from PySide6.QtCore    import Qt, Signal, QSize, QPoint
 from PySide6.QtGui     import (QPainter, QColor, QFont, QPen,
-                               QLinearGradient, QFontMetrics)
+                               QLinearGradient, QFontMetrics, QPolygon)
 from PySide6.QtWidgets import (QWidget, QLabel, QFrame, QVBoxLayout,
                                QHBoxLayout, QSizePolicy, QPushButton)
 
@@ -34,28 +34,55 @@ _7SEG_MAP = {
 
 def _draw_7seg_char(p: QPainter, x: int, y: int, sw: int, sh: int,
                     char: str, on_col: str, off_col: str):
-    """Teken één 7-segment karakter op (x, y) met afmetingen sw × sh."""
-    t = max(2, sw // 5)   # segmentdikte
-    m = 1                 # marge tussen segment en hoek
+    """
+    Teken één 7-segment karakter met afgeschuinde (hexagonale) segmenten.
+    Horizontale segmenten: zeshoek met afgeschuinde linker- en rechterhoeken.
+    Verticale segmenten: zeshoek met afgeschuinde boven- en onderhoeken.
+    """
+    t    = max(3, sw // 4)      # segmentdikte
+    bv   = max(1, t * 2 // 5)  # bevel: afschuining aan de uiteinden
+    g    = max(1, t // 5)       # spleet tussen segmenten
     half = sh // 2
     active = set(_7SEG_MAP.get(char, ''))
 
-    def seg(s):
-        if s == 'a': return x + t + m,      y,               sw - 2*t - 2*m, t
-        if s == 'b': return x + sw - t,     y + t + m,       t,              half - t - m
-        if s == 'c': return x + sw - t,     y + half,        t,              half - t - m
-        if s == 'd': return x + t + m,      y + sh - t,      sw - 2*t - 2*m, t
-        if s == 'e': return x,              y + half,        t,              half - t - m
-        if s == 'f': return x,              y + t + m,       t,              half - t - m
-        if s == 'g': return x + t + m,      y + half - t//2, sw - 2*t - 2*m, t
+    def h_poly(sx, sy, w, h):
+        """Horizontaal zeshoekig segment."""
+        b = min(bv, h // 2 - 1, w // 2 - 1)
+        return QPolygon([
+            QPoint(sx + b + g,     sy + g),
+            QPoint(sx + w - b - g, sy + g),
+            QPoint(sx + w - g,     sy + h // 2),
+            QPoint(sx + w - b - g, sy + h - g),
+            QPoint(sx + b + g,     sy + h - g),
+            QPoint(sx + g,         sy + h // 2),
+        ])
+
+    def v_poly(sx, sy, w, h):
+        """Verticaal zeshoekig segment."""
+        b = min(bv, w // 2 - 1, h // 2 - 1)
+        return QPolygon([
+            QPoint(sx + w // 2,    sy + g),
+            QPoint(sx + w - g,     sy + b + g),
+            QPoint(sx + w - g,     sy + h - b - g),
+            QPoint(sx + w // 2,    sy + h - g),
+            QPoint(sx + g,         sy + h - b - g),
+            QPoint(sx + g,         sy + b + g),
+        ])
+
+    segs = {
+        'a': h_poly(x,        y,              sw, t),
+        'b': v_poly(x + sw-t, y,              t,  half),
+        'c': v_poly(x + sw-t, y + half,       t,  half),
+        'd': h_poly(x,        y + sh - t,     sw, t),
+        'e': v_poly(x,        y + half,       t,  half),
+        'f': v_poly(x,        y,              t,  half),
+        'g': h_poly(x,        y + half - t//2, sw, t),
+    }
 
     p.setPen(Qt.NoPen)
-    p.setBrush(QColor(off_col))
-    for s in 'abcdefg':
-        p.drawRect(*seg(s))
-    p.setBrush(QColor(on_col))
-    for s in active:
-        p.drawRect(*seg(s))
+    for s, poly in segs.items():
+        p.setBrush(QColor(on_col if s in active else off_col))
+        p.drawConvexPolygon(poly)
 
 
 # ── VFD Display ───────────────────────────────────────────────────────────────

@@ -77,6 +77,7 @@ class Ft950Cat:
         self.on_tx_meters:  callable = None   # (dict: swr/alc/vdd/id/comp)
         self.on_tx_state:   callable = None   # (is_tx: bool) — elke cyclus via SWR
         self.on_freq_b:     callable = None   # (hz: int) VFO-B frequentie
+        self.on_mode_b:     callable = None   # (mode: str) VFO-B modus
         self.on_agc:        callable = None   # (label: str)
         self.on_af_gain:    callable = None   # (val: int 0-255)
         self.on_rf_gain:    callable = None   # (val: int 0-255)
@@ -209,11 +210,15 @@ class Ft950Cat:
                         try: self.on_busy(busy)
                         except Exception: pass
 
-                # ── VFO-B frequentie (elke 3e ronde) ─────────────────────────
+                # ── VFO-B frequentie + modus (elke 3e ronde) ─────────────────
                 if cycle % 3 == 0:
                     fb = self.get_freq_b()
                     if fb and self.on_freq_b:
                         try: self.on_freq_b(fb)
+                        except Exception: pass
+                    oi = self._read_oi()
+                    if oi and self.on_mode_b:
+                        try: self.on_mode_b(oi["mode"])
                         except Exception: pass
 
                 # ── TX-meters (elke 4e ronde) ─────────────────────────────────
@@ -330,6 +335,32 @@ class Ft950Cat:
                 "vfo_mem":  vfo_mem,
                 "ctcss":    ctcss,
                 "shift":    {"0": "S", "1": "+", "2": "-"}.get(shift_code, "S"),
+            }
+        except (IndexError, ValueError):
+            return None
+
+    def _read_oi(self) -> dict | None:
+        """
+        Parseer OI; (Other VFO info, CAT ref. p.12) — zelfde indeling als IF;.
+        Geeft {'freq_hz', 'mode'} terug of None bij fout.
+        """
+        buf = self._send_recv("OI;", 0.5)
+        if not buf:
+            return None
+        idx = buf.find(b"OI")
+        if idx < 0:
+            return None
+        payload = buf[idx+2:]
+        end = payload.find(b";")
+        if end < 24:
+            return None
+        p = payload[:end].decode("ascii", errors="replace")
+        try:
+            freq_str  = p[3:11]
+            mode_code = p[18]
+            return {
+                "freq_hz": int(freq_str) if freq_str.isdigit() else None,
+                "mode":    CODE_MODES.get(mode_code, f"?{mode_code}"),
             }
         except (IndexError, ValueError):
             return None

@@ -1858,8 +1858,11 @@ class FreqKeypadDialog(QDialog):
         root.addWidget(b_cancel)
 
     def _load_current(self, hz: int):
-        s = f"{hz:08d}".lstrip("0") or "0"
-        self._digits = list(s)
+        if hz == 0:
+            self._digits = []
+        else:
+            s = f"{hz:08d}".lstrip("0") or "0"
+            self._digits = list(s)
         self._refresh()
 
     # ── Logica ────────────────────────────────────────────────────────────

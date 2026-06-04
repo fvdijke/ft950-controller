@@ -74,10 +74,11 @@ class MainWindow(QMainWindow):
 
     def __init__(self, cfg: Ft950Config):
         super().__init__()
-        self._cfg  = cfg
-        self._cat  = Ft950Cat(cfg)
-        self._freq = cfg.last_freq_hz
-        self._mode = cfg.last_mode
+        self._cfg    = cfg
+        self._cat    = Ft950Cat(cfg)
+        self._freq   = cfg.last_freq_hz
+        self._mode   = cfg.last_mode
+        self._mode_b = cfg.last_mode   # afzonderlijke VFO-B modus
 
         self.setWindowTitle("Yaesu FT-950 Controller")
         self.setStyleSheet(_APP_QSS)
@@ -388,6 +389,7 @@ class MainWindow(QMainWindow):
         self._cat.on_tx_meters = lambda d:     self._meter_queue.put(("tx", d))
         self._cat.on_tx_state  = lambda b:     self._meter_queue.put(("tx_state", b))
         self._cat.on_freq_b    = lambda hz:    self._state_queue.put({"freq_b": hz})
+        self._cat.on_mode_b    = lambda m:     self._state_queue.put({"mode_b": m})
         self._cat.on_agc       = lambda a:     self._meter_queue.put(("agc", a))
         self._cat.on_af_gain   = lambda v:     self._meter_queue.put(("af", v))
         self._cat.on_rf_gain   = lambda v:     self._meter_queue.put(("rf", v))
@@ -440,6 +442,11 @@ class MainWindow(QMainWindow):
                 self._apply_mode(last_state["mode"])
             elif "freq_b" in last_state:
                 self._display.set_freq_b(last_state["freq_b"])
+            elif "mode_b" in last_state:
+                m = last_state["mode_b"]
+                if m != self._mode_b:
+                    self._mode_b = m
+                    self._display._vfd_b.set_mode(m)
 
         # ── Meter-queue (smeter / tx-meters / agc) ────────────────────────────
         while not self._meter_queue.empty():
@@ -718,13 +725,23 @@ class MainWindow(QMainWindow):
             "15m": 21_200_000, "12m": 24_910_000, "10m": 28_500_000,
             "6m":  50_150_000,
         }
+        # Standaard mode per band (LSB onder 10 MHz, USB erboven)
+        BAND_MODE = {
+            "160m": "LSB", "80m": "LSB", "40m": "LSB",
+            "30m":  "CW",
+            "20m":  "USB", "17m": "USB", "15m": "USB",
+            "12m":  "USB", "10m": "USB", "6m":  "FM",
+        }
         hz = BAND_FREQ.get(band)
         if hz:
             self._set_freq(hz)
+        mode = BAND_MODE.get(band)
+        if mode:
+            self._on_mode(mode)
         self._display.set_band(band)
 
     def _open_freq_keypad(self):
-        dlg = FreqKeypadDialog(current_hz=self._freq, parent=self)
+        dlg = FreqKeypadDialog(current_hz=0, parent=self)   # 0 = lege invoer
         if dlg.exec():
             hz = dlg.get_freq_hz()
             self._set_freq(hz)
