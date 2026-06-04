@@ -4,7 +4,7 @@
   MemoryDialog       — geheugenkanalen bekijken/bewerken/opslaan
 """
 
-from PySide6.QtCore    import Qt, QTimer, QSortFilterProxyModel
+from PySide6.QtCore    import Qt, QTimer, QSortFilterProxyModel, QObject, QEvent
 from PySide6.QtGui     import QFont, QColor, QPainter, QFontMetrics
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -1636,6 +1636,8 @@ class SMeterCalibDialog(QDialog):
         gv = QVBoxLayout(grp_cal); gv.setSpacing(4)
 
         self._spins: list[QSpinBox] = []
+        self._active_spin = 0   # index van gefocuste spinbox
+
         for i, (lbl, val) in enumerate(zip(self._LABELS, cal)):
             row = QHBoxLayout(); row.setSpacing(6)
             lbl_w = QLabel(lbl)
@@ -1655,6 +1657,27 @@ class SMeterCalibDialog(QDialog):
             row.addWidget(spn, 1)
             row.addWidget(btn_use)
             gv.addLayout(row)
+
+        # Focus-filter: bijhouden welke spinbox actief is
+        class _FocusFilter(QObject):
+            def __init__(self_f, dlg, parent=None):
+                super().__init__(parent)
+                self_f._dlg = dlg
+            def eventFilter(self_f, obj, event):
+                if event.type() == QEvent.FocusIn and obj in self_f._dlg._spins:
+                    idx = self_f._dlg._spins.index(obj)
+                    self_f._dlg._active_spin = idx
+                    self_f._dlg._preview.set_active_block(idx)
+                    self_f._dlg._preview.set_pointer(obj.value())
+                return False
+
+        self._focus_filter = _FocusFilter(self)
+        for spn in self._spins:
+            spn.installEventFilter(self._focus_filter)
+
+        # Initialiseer op eerste spinbox
+        self._preview.set_active_block(0)
+        self._preview.set_pointer(self._spins[0].value())
 
         root.addWidget(grp_cal)
 
@@ -1704,6 +1727,9 @@ class SMeterCalibDialog(QDialog):
 
     def _on_spin_change(self):
         self._preview.set_calibration(self.get_calibration())
+        # Wijzer volgt de actieve spinbox
+        if self._spins:
+            self._preview.set_pointer(self._spins[self._active_spin].value())
 
     def _use_current(self, idx: int):
         """Sla de ACTUELE live waarde op als dit S-punt (directe call)."""

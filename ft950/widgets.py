@@ -727,11 +727,13 @@ class SMeterBar(QWidget):
 
     def __init__(self, label="S", parent=None):
         super().__init__(parent)
-        self._value     = 0
-        self._label     = label
-        self._raw_cal   = list(self._DEFAULT_RAW)   # kalibreerbare waarden
-        self.setFixedHeight(28)
-        self.setMaximumHeight(28)
+        self._value        = 0
+        self._label        = label
+        self._raw_cal      = list(self._DEFAULT_RAW)
+        self._pointer      = None   # int 0-255 of None
+        self._active_block = None   # int 0-7 of None
+        self.setFixedHeight(36)     # iets hoger zodat wijzer boven labels past
+        self.setMaximumHeight(36)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def set_calibration(self, raw_values: list):
@@ -742,6 +744,16 @@ class SMeterBar(QWidget):
 
     def get_calibration(self) -> list:
         return list(self._raw_cal)
+
+    def set_pointer(self, raw: int | None):
+        """Toon een witte wijzer op positie raw (0-255). None = verbergen."""
+        self._pointer = raw
+        self.update()
+
+    def set_active_block(self, idx: int | None):
+        """Markeer blokje idx als geselecteerd (wit kader). None = geen."""
+        self._active_block = idx
+        self.update()
 
     @property
     def _MARKS(self):
@@ -764,64 +776,83 @@ class SMeterBar(QWidget):
         p.setRenderHint(QPainter.Antialiasing, False)
         w, h = self.width(), self.height()
 
-        N       = 8                  # aantal blokjes = aantal kalibratiepunten
+        N       = 8
         LBL_W   = 14                 # "S" label links
+        PTR_H   = 8                  # hoogte voor wijzer bovenaan
         LBL_H   = 10                 # hoogte labels boven blokjes
         GAP     = self._BLOCK_GAP
         blk_w   = max(6, (w - LBL_W - GAP * (N - 1)) // N)
-        blk_h   = max(4, (h - LBL_H - 4) // 3)
-        blk_y   = LBL_H + 2
+        blk_h   = max(4, (h - PTR_H - LBL_H - 4) // 3)
+        lbl_y   = PTR_H              # labels beginnen na wijzerzone
+        blk_y   = PTR_H + LBL_H + 2
 
-        # Totale breedte van alle blokjes + gaten
         total_w = N * blk_w + (N - 1) * GAP
         x0      = LBL_W + max(0, (w - LBL_W - total_w) // 2)
 
         p.fillRect(0, 0, w, h, QColor("#080808"))
 
-        # "S" label links
         lbl_font = QFont("Consolas", 6)
         p.setFont(lbl_font)
         lfm = QFontMetrics(lbl_font)
         p.setPen(QColor(VFD_DIM))
-        p.drawText(2, lfm.ascent(), self._label)
+        p.drawText(2, lbl_y + lfm.ascent(), self._label)
 
-        marks = self._MARKS   # [(raw, label, color), ...]
+        marks = self._MARKS
 
         for i, (raw, lbl, _) in enumerate(marks):
-            bx = x0 + i * (blk_w + GAP)
-
-            # Is dit blokje actief?
+            bx     = x0 + i * (blk_w + GAP)
             active = self._value >= raw
-            is_red = i >= 5    # +20/+40/+60
+            is_red = i >= 5
+            is_sel = (i == self._active_block)
 
-            # Kies kleur
-            if active:
-                col = QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER)
-                # Glans: lichtere bovenrand
+            # Blokkleur: geselecteerd = fel opgelicht ongeacht meter-waarde
+            if is_sel:
+                col  = QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER).lighter(160)
+                glow = col.lighter(120)
+            elif active:
+                col  = QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER)
                 glow = col.lighter(130)
             else:
                 col  = QColor(self._BLOCK_OFF_RED if is_red else self._BLOCK_OFF)
                 glow = col
 
-            # Vul blokje
             p.fillRect(bx, blk_y, blk_w, blk_h, col)
 
-            # Glansstreepje bovenaan
-            if active:
+            if active or is_sel:
                 p.setPen(QPen(glow, 1))
                 p.drawLine(bx + 1, blk_y + 1, bx + blk_w - 2, blk_y + 1)
 
-            # Rand
-            border_col = col.lighter(150) if active else QColor(BORDER)
-            p.setPen(QPen(border_col, 1))
+            # Rand: geselecteerd = wit kader
+            if is_sel:
+                p.setPen(QPen(QColor("#FFFFFF"), 1))
+            else:
+                p.setPen(QPen(col.lighter(150) if active else QColor(BORDER), 1))
             p.drawRect(bx, blk_y, blk_w - 1, blk_h - 1)
 
-            # Label boven blokje (gecentreerd)
-            p.setPen(QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER)
-                     if active else QColor(TEXT_DIM))
+            # Label
+            if is_sel:
+                p.setPen(QColor("#FFFFFF"))
+            elif active:
+                p.setPen(QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER))
+            else:
+                p.setPen(QColor(TEXT_DIM))
             lw = lfm.horizontalAdvance(lbl)
             tx = bx + (blk_w - lw) // 2
-            p.drawText(tx, lfm.ascent(), lbl)
+            p.drawText(tx, lbl_y + lfm.ascent(), lbl)
+
+        # ── Wijzer (downward triangle) bovenaan ──────────────────────────────
+        if self._pointer is not None:
+            px = x0 + int(max(0, min(255, self._pointer)) / 255 * total_w)
+            px = max(x0, min(x0 + total_w, px))
+            tip_y  = PTR_H - 1          # punt van de driehoek
+            base_y = 1                  # basis bovenaan
+            p.setRenderHint(QPainter.Antialiasing, True)
+            from PySide6.QtGui import QPolygon as _Poly
+            from PySide6.QtCore import QPoint as _Pt
+            tri = _Poly([_Pt(px, tip_y), _Pt(px - 4, base_y), _Pt(px + 4, base_y)])
+            p.setBrush(QColor("#E8E8E8"))
+            p.setPen(QPen(QColor("#AAAAAA"), 1))
+            p.drawConvexPolygon(tri)
 
         p.end()
 
