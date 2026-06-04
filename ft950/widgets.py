@@ -773,7 +773,7 @@ class SMeterBar(QWidget):
     _BLOCK_ON_RED    = "#FF2020"
     _BLOCK_OFF       = "#1A1008"    # donker amber-uit voor S-blokjes
     _BLOCK_OFF_RED   = "#1A0808"    # donker rood-uit voor +dB-blokjes
-    _BLOCK_GAP       = 1            # pixels tussen blokjes
+    _BLOCK_GAP       = 2            # pixels tussen blokjes
 
     def set_value(self, v: int):
         self._value = max(0, min(255, v))
@@ -789,7 +789,7 @@ class SMeterBar(QWidget):
         PTR_H   = 8                  # hoogte voor wijzer bovenaan
         LBL_H   = 10                 # hoogte labels boven blokjes
         GAP     = self._BLOCK_GAP
-        blk_w   = max(4, (w - LBL_W - GAP * (N - 1)) // N)
+        blk_w   = max(2, (w - LBL_W - GAP * (N - 1)) // N)
         blk_h   = max(4, (h - PTR_H - LBL_H - 4) // 3)
         lbl_y   = PTR_H              # labels beginnen na wijzerzone
         blk_y   = PTR_H + LBL_H + 2
@@ -807,13 +807,16 @@ class SMeterBar(QWidget):
 
         marks = self._MARKS
 
+        # Indices die een label krijgen: S1,S3,S5,S7,S9,+20,+40,+60
+        _LABELED = {0, 2, 4, 6, 8, 10, 12, 14}
+
         for i, (raw, lbl, mark_col) in enumerate(marks):
             bx     = x0 + i * (blk_w + GAP)
             active = self._value >= raw
             is_sel = (i == self._active_block)
             on_col = QColor(mark_col)
 
-            # Blokkleur
+            # Inactief: donkere tint van blokkleur zodat rood zichtbaar blijft
             if is_sel:
                 col  = on_col.lighter(170)
                 glow = col.lighter(120)
@@ -821,7 +824,7 @@ class SMeterBar(QWidget):
                 col  = on_col
                 glow = on_col.lighter(130)
             else:
-                col  = QColor("#0E0E0E")
+                col  = on_col.darker(700)   # ~14% helderheid, behoudt kleurindruk
                 glow = col
 
             p.fillRect(bx, blk_y, blk_w, blk_h, col)
@@ -830,17 +833,18 @@ class SMeterBar(QWidget):
                 p.setPen(QPen(glow, 1))
                 p.drawLine(bx + 1, blk_y + 1, bx + blk_w - 2, blk_y + 1)
 
-            # Rand: geselecteerd = wit kader
+            # Rand
             p.setPen(QPen(QColor("#FFFFFF") if is_sel
-                          else (on_col.lighter(150) if active else QColor(BORDER)), 1))
+                          else (on_col.lighter(150) if active else on_col.darker(400)), 1))
             p.drawRect(bx, blk_y, blk_w - 1, blk_h - 1)
 
-            # Label boven blokje
-            p.setPen(QColor("#FFFFFF") if is_sel
-                     else (on_col if active else QColor(TEXT_DIM)))
-            lw = lfm.horizontalAdvance(lbl)
-            tx = bx + (blk_w - lw) // 2
-            p.drawText(tx, lbl_y + lfm.ascent(), lbl)
+            # Label: alleen voor de hoofdmarkeringen
+            if i in _LABELED:
+                p.setPen(QColor("#FFFFFF") if is_sel
+                         else (on_col if active else QColor(TEXT_DIM)))
+                lw = lfm.horizontalAdvance(lbl)
+                tx = bx + (blk_w - lw) // 2
+                p.drawText(tx, lbl_y + lfm.ascent(), lbl)
 
         # ── Wijzer (downward triangle) bovenaan ──────────────────────────────
         if self._pointer is not None:
