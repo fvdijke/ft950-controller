@@ -627,6 +627,27 @@ class _EibiTab(QWidget):
         sr.addWidget(self._cnt_lbl)
         v.addLayout(sr)
 
+        # Voortgangsbalk (alleen zichtbaar tijdens import/fill)
+        self._import_progress = QProgressBar()
+        self._import_progress.setRange(0, 100)
+        self._import_progress.setValue(0)
+        self._import_progress.setFixedHeight(14)
+        self._import_progress.setTextVisible(True)
+        self._import_progress.setStyleSheet(f"""
+            QProgressBar {{
+                background: #1A1A1A; border: 1px solid {BORDER};
+                border-radius: 3px; color: {TEXT_H1};
+                font-size: 7pt; text-align: center;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1A5A1A, stop:0.5 {ACCENT}, stop:1 #4CAF50);
+                border-radius: 2px;
+            }}
+        """)
+        self._import_progress.setVisible(False)
+        v.addWidget(self._import_progress)
+
         # Tabel — kolommen zijn versleepbaar en instelbaar van breedte
         self._tbl = QTableWidget(0, len(_EIBI_COLS))
         self._tbl.setHorizontalHeaderLabels(_EIBI_COLS)
@@ -692,12 +713,25 @@ class _EibiTab(QWidget):
 
     # ── Tabel vullen ───────────────────────────────────────────────────────
 
-    def _fill_table(self, records):
+    def _fill_table(self, records, show_progress: bool = False):
         """Vul de tabel bulk-gewijs: updates en sortering uitgeschakeld."""
-        self._tbl.setUpdatesEnabled(False)
+        from PySide6.QtWidgets import QApplication
+        n = len(records)
+        _LEFT = {1, 10}
+        BATCH = 500
+
+        if show_progress and n > 100:
+            self._import_progress.setRange(0, n)
+            self._import_progress.setValue(0)
+            self._import_progress.setFormat("Invullen 0%")
+            self._import_progress.setVisible(True)
+            QApplication.processEvents()
+
         self._tbl.setSortingEnabled(False)
+        self._tbl.setUpdatesEnabled(False)
         self._tbl.setRowCount(0)
-        self._tbl.setRowCount(len(records))
+        self._tbl.setRowCount(n)
+
         for row, r in enumerate(records):
             vals = [
                 f"{r.freq_hz / 1000:.1f}",
@@ -705,8 +739,6 @@ class _EibiTab(QWidget):
                 r.language, r.target, r.mode,
                 f"{r.af_gain:03d}", f"{r.sql:03d}", r.notes,
             ]
-            # Kolom 1 (station) en 10 (notitie) links uitlijnen
-            _LEFT = {1, 10}
             for col, val in enumerate(vals):
                 item = _NumericItem(val) if col == 0 else QTableWidgetItem(val)
                 item.setTextAlignment(
@@ -714,10 +746,25 @@ class _EibiTab(QWidget):
                     else Qt.AlignCenter)
                 item.setData(Qt.UserRole, r)
                 self._tbl.setItem(row, col, item)
+            if show_progress and n > 100 and (row + 1) % BATCH == 0:
+                pct = int((row + 1) * 100 / n)
+                self._import_progress.setValue(row + 1)
+                self._import_progress.setFormat(f"Invullen {pct}%")
+                QApplication.processEvents()
+
+        if show_progress and n > 100:
+            self._import_progress.setFormat("Sorteren…")
+            QApplication.processEvents()
+
         self._tbl.setSortingEnabled(True)
         self._tbl.sortItems(0, Qt.AscendingOrder)
         self._tbl.setUpdatesEnabled(True)
-        self._cnt_lbl.setText(f"{len(records)} records")
+        self._cnt_lbl.setText(f"{n} records")
+
+        if show_progress and n > 100:
+            self._import_progress.setValue(n)
+            self._import_progress.setFormat(f"{n} records geladen  ✓")
+            QTimer.singleShot(2000, lambda: self._import_progress.setVisible(False))
 
     def _append_row(self, r: EibiRecord):
         """Voeg één rij toe; sortering wordt tijdelijk uitgeschakeld."""
@@ -796,14 +843,11 @@ class _EibiTab(QWidget):
     def _do_import(self):
         dlg = EIBIImportDialog(parent=self)
         if dlg.exec():
-            new_entries = dlg.get_entries()   # geeft nu EibiRecord objecten
+            new_entries = [r for r in dlg.get_entries() if isinstance(r, EibiRecord)]
             if new_entries:
-                for rec in new_entries:
-                    if isinstance(rec, EibiRecord):
-                        self._records.append(rec)
-                        self._append_row(rec)
-                self._cnt_lbl.setText(f"{len(self._records)} records")
-                self._loaded = True   # tabel is nu gevuld
+                self._records.extend(new_entries)
+                self._fill_table(self._records, show_progress=True)
+                self._loaded = True
 
     def _do_save(self):
         save_eibi_records(self._records)
@@ -1484,13 +1528,16 @@ class EIBIImportDialog(QDialog):
 
     def _apply_filter(self):
         term = self._search.text().strip().lower()
+        filtered = [d for d in self._raw_entries
+                    if not term
+                    or term in d["station"].lower()
+                    or term in str(d["freq_khz"])]
+
+        self._tbl.setSortingEnabled(False)
+        self._tbl.setUpdatesEnabled(False)
         self._tbl.setRowCount(0)
-        for d in self._raw_entries:
-            if term and term not in d["station"].lower() \
-                     and term not in str(d["freq_khz"]):
-                continue
-            row = self._tbl.rowCount()
-            self._tbl.insertRow(row)
+        self._tbl.setRowCount(len(filtered))
+        for row, d in enumerate(filtered):
             for col, val in enumerate([
                 f"{d['freq_khz']:.1f}",
                 d["station"], d["start"], d["stop"],
@@ -1500,6 +1547,8 @@ class EIBIImportDialog(QDialog):
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setData(Qt.UserRole, d)
                 self._tbl.setItem(row, col, item)
+        self._tbl.setSortingEnabled(True)
+        self._tbl.setUpdatesEnabled(True)
 
     def _do_import(self):
         rows = sorted({idx.row() for idx in self._tbl.selectedIndexes()})
