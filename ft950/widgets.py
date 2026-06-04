@@ -168,16 +168,14 @@ class VfdDisplay(QWidget):
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 4, 4)
 
-        # ── "VFO-A" linksbovenin, snijdt het kader door ───────────────────────
+        # ── "VFO-A" linksbovenin het kader (binnen de rand) ─────────────────
         tag_font = QFont("Segoe UI", 7, QFont.Bold)
         tag_fm   = QFontMetrics(tag_font)
         tag_text = "VFO-A"
-        tag_w    = tag_fm.horizontalAdvance(tag_text) + 6
         tag_h    = tag_fm.height()
-        p.fillRect(8, 0, tag_w, tag_h, QColor(BG_DISPLAY))
         p.setFont(tag_font)
         p.setPen(border_col)
-        p.drawText(10, tag_fm.ascent(), tag_text)
+        p.drawText(6, 4 + tag_fm.ascent(), tag_text)
 
         # ── Metriek ───────────────────────────────────────────────────────────
         freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
@@ -485,15 +483,13 @@ class SmallVfd(QWidget):
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 3, 3)
 
-        # ── Label linksbovenin, snijdt het kader door ────────────────────────
+        # ── Label linksbovenin het kader (binnen de rand) ───────────────────
         tag_font = QFont("Segoe UI", 6, QFont.Bold)
         tag_fm   = QFontMetrics(tag_font)
-        tag_w    = tag_fm.horizontalAdvance(self._label) + 6
         tag_h    = tag_fm.height()
-        p.fillRect(6, 0, tag_w, tag_h, QColor(BG_DISPLAY))
         p.setFont(tag_font)
         p.setPen(border_col)
-        p.drawText(8, tag_fm.ascent(), self._label)
+        p.drawText(5, 3 + tag_fm.ascent(), self._label)
 
         # ── Metriek ───────────────────────────────────────────────────────────
         freq_font, freq_fm, freq_x, cw = self._char_metrics()
@@ -527,8 +523,10 @@ class SmallVfd(QWidget):
             x = int(freq_x + i * cw)
             if hovering and i == self._selected:
                 box_top = y_base - freq_fm.ascent()
-                p.fillRect(x, box_top, int(cw), freq_fm.height(), QColor(ACCENT + "33"))
-                p.setPen(QColor(ACCENT))
+                p.fillRect(x - 1, box_top, int(cw) + 2, freq_fm.height(), QColor("#1A1400"))
+                p.setPen(QPen(QColor(VFD_AMBER), 1))
+                p.drawRect(x - 1, box_top, int(cw) + 1, freq_fm.height() - 1)
+                p.setPen(QColor(VFD_AMBER))
             elif c == '.':
                 p.setPen(QColor(VFD_OFF))
             else:
