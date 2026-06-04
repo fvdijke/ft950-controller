@@ -1,3 +1,5 @@
+<img width="1998" height="642" alt="Yaesu FT-950 Controller" src="https://github.com/user-attachments/assets/d98874fd-c5be-43dc-893d-91fc08ad5d18" />
+
 # FT-950 Controller
 
 A Python-based control application for the **Yaesu FT-950** HF/50 MHz transceiver, built with PySide6.
