@@ -311,6 +311,10 @@ class DisplayPanel(QWidget):
         self._vfd_a.set_font_name(name)
         self._vfd_b.set_font_name(name)
 
+    def set_vfd_font_style(self, style: str):
+        self._vfd_a.set_font_style(style)
+        self._vfd_b.set_font_style(style)
+
     # Block-diagram: alleen intern bijhouden (blok-diagram niet meer zichtbaar)
     def _refresh_bd(self):
         pass

@@ -52,6 +52,7 @@ class VfdDisplay(QWidget):
         self._freq_hz       = 14_195_000
         self._font_sz       = font_size
         self._font_name     = font_name
+        self._font_style    = "Bold Italic"
         self._selected_char = 5
         self._hovered       = False
         self._mode          = "USB"
@@ -76,6 +77,10 @@ class VfdDisplay(QWidget):
     def set_font_name(self, name: str):
         self._font_name = name
         self._update_min_height()
+        self.update()
+
+    def set_font_style(self, style: str):
+        self._font_style = style
         self.update()
 
     def get_current_step(self) -> int:
@@ -137,8 +142,11 @@ class VfdDisplay(QWidget):
         return f"{mhz:2d}.{khz:03d}.{hz_r:03d}"
 
     def _make_freq_font(self) -> QFont:
-        f = QFont(self._font_name, self._font_sz, QFont.Bold)
-        f.setItalic(True)
+        bold   = "Bold"   in self._font_style
+        italic = "Italic" in self._font_style
+        f = QFont(self._font_name, self._font_sz,
+                  QFont.Bold if bold else QFont.Normal)
+        f.setItalic(italic)
         return f
 
     def _compute_layout(self) -> dict:
@@ -391,6 +399,7 @@ class SmallVfd(QWidget):
         self._hovered     = False
         self._font_sz     = font_size
         self._font_name   = font_name
+        self._font_style  = "Bold Italic"
         self._mode        = ""
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setStyleSheet(f"background:{BG_DISPLAY};")
@@ -419,6 +428,10 @@ class SmallVfd(QWidget):
         self._update_height()
         self.update()
 
+    def set_font_style(self, style: str):
+        self._font_style = style
+        self.update()
+
     def set_mode(self, mode: str):
         self._mode = mode
         self.update()
@@ -433,8 +446,11 @@ class SmallVfd(QWidget):
         return f"{mhz:2d}.{khz:03d}.{hzr:03d}"
 
     def _make_freq_font(self) -> QFont:
-        f = QFont(self._font_name, self._font_sz, QFont.Bold)
-        f.setItalic(True)
+        bold   = "Bold"   in self._font_style
+        italic = "Italic" in self._font_style
+        f = QFont(self._font_name, self._font_sz,
+                  QFont.Bold if bold else QFont.Normal)
+        f.setItalic(italic)
         return f
 
     def _compute_layout(self) -> dict:

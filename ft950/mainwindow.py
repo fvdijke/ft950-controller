@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         self._display.set_btn_font(cfg.band_btn_font)
         self._display.set_vfd_font(cfg.vfd_font)
         self._display.set_vfd_font_name(cfg.vfd_font_name)
+        self._display.set_vfd_font_style(cfg.vfd_font_style)
 
         # Kalibratie S-meter toepassen
         self._display._smeter.set_calibration(cfg.smeter_cal)
@@ -981,11 +982,11 @@ class MainWindow(QMainWindow):
     def _open_display_fonts(self):
         from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                                        QLabel, QSpinBox, QPushButton,
-                                       QGroupBox, QComboBox, QWidget)
+                                       QGroupBox, QFontComboBox, QWidget,
+                                       QLineEdit)
         from PySide6.QtGui import QFontDatabase, QPainter, QFont, QFontMetrics, QColor
         from PySide6.QtCore import Qt
         from .theme import BG_DISPLAY, VFD_BRIGHT, VFD_OFF, VFD_DIM, VFD_AMBER
-        from .widgets import VFD_FONTS
 
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("Lettergrootte & font display"))
@@ -1025,25 +1026,31 @@ class MainWindow(QMainWindow):
 
         root.addWidget(grp1)
 
-        # ── Fontfamilie ────────────────────────────────────────────────────────
+        # ── Fontfamilie + stijl ───────────────────────────────────────────────
         grp2 = QGroupBox("Frequentie font"); grp2.setStyleSheet(_grp)
-        gl2  = QVBoxLayout(grp2)
+        gl2  = QVBoxLayout(grp2); gl2.setSpacing(6)
 
-        db       = QFontDatabase()
-        families = db.families()
-        avail    = [f for f in VFD_FONTS if f in families] or ["Consolas"]
+        fs_row = QHBoxLayout(); fs_row.setSpacing(8)
 
-        font_row = QHBoxLayout()
-        font_row.addWidget(QLabel("Font:"))
-        cmb_font = QComboBox()
-        cmb_font.addItems(avail)
-        cur_name = self._cfg.vfd_font_name
-        if cur_name in avail:
-            cmb_font.setCurrentText(cur_name)
-        cmb_font.setMinimumWidth(180)
-        font_row.addWidget(cmb_font)
-        font_row.addStretch()
-        gl2.addLayout(font_row)
+        # Alle geïnstalleerde fonts via QFontComboBox
+        cmb_font = QFontComboBox()
+        cmb_font.setCurrentFont(QFont(self._cfg.vfd_font_name))
+        cmb_font.setEditable(True)
+        cmb_font.setMinimumWidth(220)
+        cmb_font.setStyleSheet(
+            "QFontComboBox{font-size:8pt;padding:2px 4px;}"
+            "QFontComboBox QAbstractItemView{font-size:9pt;}")
+
+        # Stijl: Normal / Bold / Italic / Bold Italic
+        from PySide6.QtWidgets import QComboBox as _QCB
+        cmb_style = _QCB()
+        cmb_style.addItems(["Normal", "Bold", "Italic", "Bold Italic"])
+        cmb_style.setCurrentText(self._cfg.vfd_font_style)
+        cmb_style.setFixedWidth(100)
+
+        fs_row.addWidget(cmb_font, 1)
+        fs_row.addWidget(cmb_style)
+        gl2.addLayout(fs_row)
 
         # ── Live preview ───────────────────────────────────────────────────────
         class _Preview(QWidget):
@@ -1052,45 +1059,50 @@ class MainWindow(QMainWindow):
                 self_p.setFixedHeight(70)
                 self_p.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
 
-            def paintEvent(self_p, event):
-                name = cmb_font.currentText()
-                sz   = spn_vfd.value()
+            def paintEvent(self_p, ev):
+                name  = cmb_font.currentText()
+                style = cmb_style.currentText()
+                sz    = spn_vfd.value()
+                bold   = "Bold"   in style
+                italic = "Italic" in style
                 p = QPainter(self_p)
                 p.setRenderHint(QPainter.Antialiasing)
                 p.fillRect(self_p.rect(), QColor(BG_DISPLAY))
-                freq_font = QFont(name, sz, QFont.Bold)
-                freq_font.setItalic(True)
-                fm = QFontMetrics(freq_font)
-                text  = "14.195.000"
-                ghost = "88.888.888"
-                cw = fm.horizontalAdvance("0")
-                # mode label
-                lf = QFont("Segoe UI", max(8, sz // 4), QFont.Bold)
+                ff = QFont(name, sz, QFont.Bold if bold else QFont.Normal)
+                ff.setItalic(italic)
+                fm  = QFontMetrics(ff)
+                cw  = fm.horizontalAdvance("0")
+                lf  = QFont("Segoe UI", max(7, sz // 4), QFont.Bold)
                 lfm = QFontMetrics(lf)
-                mode_w = lfm.horizontalAdvance("USB") + 10
-                khz_w  = lfm.horizontalAdvance("kHz") + 8
-                total  = mode_w + len(text) * cw + khz_w
-                gx = (self_p.width() - total) // 2
-                fx = gx + mode_w
+                text = "14.195.000"
+                mw = lfm.horizontalAdvance("USB") + 10
+                kw = lfm.horizontalAdvance("kHz") + 6
+                gx = (self_p.width() - mw - len(text)*cw - kw) // 2
+                fx = gx + mw
                 yb = (self_p.height() - fm.height()) // 2 + fm.ascent() + 4
-                p.setFont(freq_font)
-                for i, c in enumerate(ghost):
+                ay = (self_p.height() - lfm.height()) // 2 + lfm.ascent() + 4
+                p.setFont(ff)
+                for i, c in enumerate("88.888.888"):
                     p.setPen(QColor(VFD_OFF))
-                    p.drawText(fx + i * cw, yb, "8" if c.isdigit() else c)
+                    p.drawText(fx + i*cw, yb, "8" if c.isdigit() else c)
                 for i, c in enumerate(text):
                     p.setPen(QColor(VFD_BRIGHT) if c != '.' else QColor(VFD_DIM))
-                    p.drawText(fx + i * cw, yb, c)
+                    p.drawText(fx + i*cw, yb, c)
                 p.setFont(lf)
-                ay = (self_p.height() - lfm.height()) // 2 + lfm.ascent() + 4
                 p.setPen(QColor(VFD_AMBER)); p.drawText(gx, ay, "USB")
                 p.setPen(QColor(VFD_DIM));   p.drawText(fx + len(text)*cw + 6, ay, "kHz")
                 p.end()
 
         preview = _Preview()
         gl2.addWidget(preview)
-        cmb_font.currentTextChanged.connect(
-            lambda n: (self._display.set_vfd_font_name(n), preview.update()))
 
+        def _on_font_change():
+            self._display.set_vfd_font_name(cmb_font.currentText())
+            self._display.set_vfd_font_style(cmb_style.currentText())
+            preview.update()
+
+        cmb_font.currentTextChanged.connect(lambda _: _on_font_change())
+        cmb_style.currentTextChanged.connect(lambda _: _on_font_change())
         root.addWidget(grp2)
 
         # ── Knoppen ───────────────────────────────────────────────────────────
@@ -1103,10 +1115,11 @@ class MainWindow(QMainWindow):
                               "border:1px solid #363636;border-radius:2px;padding:4px 12px;")
 
         def _save():
-            self._cfg.band_btn_font = spn_btn.value()
-            self._cfg.vfd_font      = spn_vfd.value()
-            self._cfg.vfob_font     = spn_vfob.value()
-            self._cfg.vfd_font_name = cmb_font.currentText()
+            self._cfg.band_btn_font  = spn_btn.value()
+            self._cfg.vfd_font       = spn_vfd.value()
+            self._cfg.vfob_font      = spn_vfob.value()
+            self._cfg.vfd_font_name  = cmb_font.currentText()
+            self._cfg.vfd_font_style = cmb_style.currentText()
             save_config(self._cfg)
             dlg.accept()
 
@@ -1115,6 +1128,7 @@ class MainWindow(QMainWindow):
             self._display.set_vfd_font(self._cfg.vfd_font)
             self._display._vfd_b.set_font_size(self._cfg.vfob_font)
             self._display.set_vfd_font_name(self._cfg.vfd_font_name)
+            self._display.set_vfd_font_style(self._cfg.vfd_font_style)
             dlg.reject()
 
         btn_ok.clicked.connect(_save)
