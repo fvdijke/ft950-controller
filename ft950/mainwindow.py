@@ -104,9 +104,10 @@ class MainWindow(QMainWindow):
         if cfg.win_x > 0 and cfg.win_y > 0:
             self.move(cfg.win_x, cfg.win_y)
 
-        # Opgeslagen lettergroottes toepassen
+        # Opgeslagen lettergroottes en font toepassen
         self._display.set_btn_font(cfg.band_btn_font)
         self._display.set_vfd_font(cfg.vfd_font)
+        self._display.set_vfd_font_name(cfg.vfd_font_name)
 
         # Kalibratie S-meter toepassen
         self._display._smeter.set_calibration(cfg.smeter_cal)
@@ -979,10 +980,16 @@ class MainWindow(QMainWindow):
 
     def _open_display_fonts(self):
         from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
-                                       QLabel, QSpinBox, QPushButton, QGroupBox)
+                                       QLabel, QSpinBox, QPushButton,
+                                       QGroupBox, QComboBox, QWidget)
+        from PySide6.QtGui import QFontDatabase, QPainter, QFont, QFontMetrics, QColor
+        from PySide6.QtCore import Qt
+        from .theme import BG_DISPLAY, VFD_BRIGHT, VFD_OFF, VFD_DIM, VFD_AMBER
+        from .widgets import VFD_FONTS
+
         dlg = QDialog(self)
-        dlg.setWindowTitle(tr("Lettergrootte display"))
-        dlg.setFixedWidth(320)
+        dlg.setWindowTitle(tr("Lettergrootte & font display"))
+        dlg.setMinimumWidth(420)
         from .dialogs import _QSS_DIALOG
         dlg.setStyleSheet(_QSS_DIALOG)
 
@@ -990,42 +997,103 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(14, 14, 14, 14)
         root.setSpacing(10)
 
-        _grp_style = ("QGroupBox{color:#787878;font-size:7pt;border:1px solid #363636;"
-                      "border-radius:3px;margin-top:6px;padding:6px;}")
+        _grp = ("QGroupBox{color:#787878;font-size:7pt;border:1px solid #363636;"
+                "border-radius:3px;margin-top:6px;padding:6px;}")
         from .dialogs import _spinbox as _spn
 
-        grp1 = QGroupBox(tr("VFO-A  /  Band & mode knoppen"))
-        grp1.setStyleSheet(_grp_style)
-        gl1 = QHBoxLayout(grp1); gl1.setSpacing(20)
+        # ── Lettergroottes ─────────────────────────────────────────────────────
+        grp1 = QGroupBox("Lettergrootte"); grp1.setStyleSheet(_grp)
+        gl1  = QHBoxLayout(grp1); gl1.setSpacing(18)
 
-        bc = QVBoxLayout()
-        bc.addWidget(QLabel(tr("Band/mode knoppen:")))
-        spn_btn = _spn(5, 14, self._cfg.band_btn_font, " pt")
-        spn_btn.valueChanged.connect(lambda v: self._display.set_btn_font(v))
-        bc.addWidget(spn_btn)
-        gl1.addLayout(bc)
+        for lbl, attr, lo, hi, sig in [
+            ("Band/mode knoppen:", "band_btn_font", 5, 14,
+                lambda v: self._display.set_btn_font(v)),
+            ("VFO-A frequentie:", "vfd_font", 18, 60,
+                lambda v: (self._display.set_vfd_font(v), preview.update())),
+            ("VFO-B frequentie:", "vfob_font", 8, 28,
+                lambda v: (self._display._vfd_b.set_font_size(v), preview.update())),
+        ]:
+            col = QVBoxLayout()
+            col.addWidget(QLabel(lbl))
+            spn = _spn(lo, hi, getattr(self._cfg, attr), " pt")
+            spn.valueChanged.connect(sig)
+            col.addWidget(spn)
+            gl1.addLayout(col)
+            if   lbl.startswith("Band"):  spn_btn  = spn
+            elif lbl.startswith("VFO-A"): spn_vfd  = spn
+            else:                          spn_vfob = spn
 
-        vc = QVBoxLayout()
-        vc.addWidget(QLabel(tr("Frequentie (VFD):")))
-        spn_vfd = _spn(18, 60, self._cfg.vfd_font, " pt")
-        spn_vfd.valueChanged.connect(lambda v: self._display.set_vfd_font(v))
-        vc.addWidget(spn_vfd)
-        gl1.addLayout(vc)
         root.addWidget(grp1)
 
-        grp2 = QGroupBox("VFO-B  /  CLAR")
-        grp2.setStyleSheet(_grp_style)
-        gl2 = QHBoxLayout(grp2); gl2.setSpacing(20)
+        # ── Fontfamilie ────────────────────────────────────────────────────────
+        grp2 = QGroupBox("Frequentie font"); grp2.setStyleSheet(_grp)
+        gl2  = QVBoxLayout(grp2)
 
-        vb = QVBoxLayout()
-        vb.addWidget(QLabel(tr("VFO-B:")))
-        spn_vfob = _spn(8, 28, self._cfg.vfob_font, " pt")
-        spn_vfob.valueChanged.connect(lambda v: self._display._vfd_b.set_font_size(v))
-        vb.addWidget(spn_vfob)
-        gl2.addLayout(vb)
+        db       = QFontDatabase()
+        families = db.families()
+        avail    = [f for f in VFD_FONTS if f in families] or ["Consolas"]
+
+        font_row = QHBoxLayout()
+        font_row.addWidget(QLabel("Font:"))
+        cmb_font = QComboBox()
+        cmb_font.addItems(avail)
+        cur_name = self._cfg.vfd_font_name
+        if cur_name in avail:
+            cmb_font.setCurrentText(cur_name)
+        cmb_font.setMinimumWidth(180)
+        font_row.addWidget(cmb_font)
+        font_row.addStretch()
+        gl2.addLayout(font_row)
+
+        # ── Live preview ───────────────────────────────────────────────────────
+        class _Preview(QWidget):
+            def __init__(self_p, parent=None):
+                super().__init__(parent)
+                self_p.setFixedHeight(70)
+                self_p.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
+
+            def paintEvent(self_p, event):
+                name = cmb_font.currentText()
+                sz   = spn_vfd.value()
+                p = QPainter(self_p)
+                p.setRenderHint(QPainter.Antialiasing)
+                p.fillRect(self_p.rect(), QColor(BG_DISPLAY))
+                freq_font = QFont(name, sz, QFont.Bold)
+                freq_font.setItalic(True)
+                fm = QFontMetrics(freq_font)
+                text  = "14.195.000"
+                ghost = "88.888.888"
+                cw = fm.horizontalAdvance("0")
+                # mode label
+                lf = QFont("Segoe UI", max(8, sz // 4), QFont.Bold)
+                lfm = QFontMetrics(lf)
+                mode_w = lfm.horizontalAdvance("USB") + 10
+                khz_w  = lfm.horizontalAdvance("kHz") + 8
+                total  = mode_w + len(text) * cw + khz_w
+                gx = (self_p.width() - total) // 2
+                fx = gx + mode_w
+                yb = (self_p.height() - fm.height()) // 2 + fm.ascent() + 4
+                p.setFont(freq_font)
+                for i, c in enumerate(ghost):
+                    p.setPen(QColor(VFD_OFF))
+                    p.drawText(fx + i * cw, yb, "8" if c.isdigit() else c)
+                for i, c in enumerate(text):
+                    p.setPen(QColor(VFD_BRIGHT) if c != '.' else QColor(VFD_DIM))
+                    p.drawText(fx + i * cw, yb, c)
+                p.setFont(lf)
+                ay = (self_p.height() - lfm.height()) // 2 + lfm.ascent() + 4
+                p.setPen(QColor(VFD_AMBER)); p.drawText(gx, ay, "USB")
+                p.setPen(QColor(VFD_DIM));   p.drawText(fx + len(text)*cw + 6, ay, "kHz")
+                p.end()
+
+        preview = _Preview()
+        gl2.addWidget(preview)
+        cmb_font.currentTextChanged.connect(
+            lambda n: (self._display.set_vfd_font_name(n), preview.update()))
 
         root.addWidget(grp2)
 
+        # ── Knoppen ───────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         btn_ok  = QPushButton(tr("Opslaan"))
         btn_ok.setStyleSheet("background:#C8A430;color:#000;font-weight:bold;"
@@ -1038,6 +1106,7 @@ class MainWindow(QMainWindow):
             self._cfg.band_btn_font = spn_btn.value()
             self._cfg.vfd_font      = spn_vfd.value()
             self._cfg.vfob_font     = spn_vfob.value()
+            self._cfg.vfd_font_name = cmb_font.currentText()
             save_config(self._cfg)
             dlg.accept()
 
@@ -1045,11 +1114,13 @@ class MainWindow(QMainWindow):
             self._display.set_btn_font(self._cfg.band_btn_font)
             self._display.set_vfd_font(self._cfg.vfd_font)
             self._display._vfd_b.set_font_size(self._cfg.vfob_font)
+            self._display.set_vfd_font_name(self._cfg.vfd_font_name)
             dlg.reject()
 
         btn_ok.clicked.connect(_save)
         btn_can.clicked.connect(_cancel)
-        btn_row.addStretch(); btn_row.addWidget(btn_ok); btn_row.addWidget(btn_can)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_ok); btn_row.addWidget(btn_can)
         root.addLayout(btn_row)
 
         dlg.exec()

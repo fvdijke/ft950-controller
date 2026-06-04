@@ -303,9 +303,13 @@ class DisplayPanel(QWidget):
             btn.setStyleSheet(style)
 
     def set_vfd_font(self, size: int):
-        """Pas de lettergrootte van het frequentie-display direct aan."""
         self._vfd_a._font_sz = size
-        self._vfd_a.repaint()   # directe hertekening, geen layout-herberekening
+        self._vfd_a._update_min_height()
+        self._vfd_a.repaint()
+
+    def set_vfd_font_name(self, name: str):
+        self._vfd_a.set_font_name(name)
+        self._vfd_b.set_font_name(name)
 
     # Block-diagram: alleen intern bijhouden (blok-diagram niet meer zichtbaar)
     def _refresh_bd(self):

@@ -225,10 +225,11 @@ class Ft950Config:
     smeter_cal: list = field(default_factory=lambda: [18, 54, 90, 126, 162, 189, 216, 243])
 
     # ── Weergave-lettergroottes ───────────────────────────────────────────────────
-    band_btn_font:  int  = 7    # pt  band/mode knoppen in het display
-    vfd_font:       int  = 34   # pt  grote frequentie-aanduiding
-    vfob_font:      int  = 14   # pt  VFO-B display
-    clar_font:      int  = 14   # pt  CLAR display
+    band_btn_font:  int  = 7        # pt  band/mode knoppen in het display
+    vfd_font:       int  = 34       # pt  grote frequentie-aanduiding
+    vfob_font:      int  = 14       # pt  VFO-B display
+    clar_font:      int  = 14       # pt  CLAR display
+    vfd_font_name:  str  = "Consolas"  # font-familie voor VFD-frequentieweergave
 
     # ── Taal ─────────────────────────────────────────────────────────────────
     ui_language:    str  = "en"  # "nl" of "en"
