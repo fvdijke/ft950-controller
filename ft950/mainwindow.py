@@ -1147,6 +1147,7 @@ class MainWindow(QMainWindow):
             parent        = self,
         )
         dlg.set_live_source(lambda: getattr(self, "_last_smeter_raw", 0))
+        dlg.set_connection_check(lambda: self._cat.connected)
 
         if dlg.exec():
             new_cal = dlg.get_calibration()

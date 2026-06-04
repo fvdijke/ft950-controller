@@ -1656,7 +1656,8 @@ class SMeterCalibDialog(QDialog):
         gc = _GL(grp_cal); gc.setSpacing(4)
         gc.setColumnStretch(3, 1); gc.setColumnStretch(7, 1)
 
-        self._spins: list[QSpinBox] = []
+        self._spins:    list[QSpinBox]   = []
+        self._use_btns: list[QPushButton]= []
         self._active_spin = 0
 
         _IS_MAIN = {2, 5, 8, 11, 14, 17, 20, 23}   # 3e blokje van elk interval
@@ -1691,6 +1692,7 @@ class SMeterCalibDialog(QDialog):
             btn_use.setStyleSheet(_BTN_STYLE)
             btn_use.clicked.connect(lambda _, idx=i: self._use_current(idx))
             btn_use.setToolTip("◄  Neem de huidige S-meter waarde van de radio over")
+            self._use_btns.append(btn_use)
 
             gc.addWidget(lbl_w,   row_pos, col_base)
             gc.addWidget(spn,     row_pos, col_base + 1)
@@ -1736,12 +1738,12 @@ class SMeterCalibDialog(QDialog):
     # ── Logica ─────────────────────────────────────────────────────────────
 
     def set_live_source(self, fn):
-        """
-        Stel een callable in die de actuele ruwe S-meter waarde teruggeeft.
-        Wordt bij elke klik op '← Actueel' én bij elke refresh-timer
-        direct aangeroepen — altijd verse waarde.
-        """
+        """Stel een callable in die de actuele ruwe S-meter waarde teruggeeft."""
         self._live_source = fn
+
+    def set_connection_check(self, fn):
+        """Stel een callable in die True teruggeeft als de radio verbonden is."""
+        self._is_connected = fn
 
     # compat: oud mainwindow-API
     def set_live_value(self, raw: int):
@@ -1760,8 +1762,30 @@ class SMeterCalibDialog(QDialog):
             return self._live_source()
         return 0
 
+    def _is_radio_connected(self) -> bool:
+        if hasattr(self, "_is_connected"):
+            return bool(self._is_connected())
+        return True   # onbekend: neem aan verbonden
+
     def _refresh_live(self):
-        # Lees altijd direct van de smeter-widget zodat _current_raw bijgewerkt blijft
+        connected = self._is_radio_connected()
+
+        # Enable/disable alle ◄-knoppen op basis van verbinding
+        for btn in self._use_btns:
+            btn.setEnabled(connected)
+            btn.setToolTip(
+                "◄  Neem de huidige S-meter waarde van de radio over"
+                if connected else
+                "Niet verbonden met radio")
+
+        if not connected:
+            self._live_lbl.setText("⬤  Niet verbonden met radio")
+            self._live_lbl.setStyleSheet(f"color:#EF5350; font-family:Consolas; font-size:9pt;")
+            self._current_raw = 0
+            self._preview.set_value(0)
+            return
+
+        self._live_lbl.setStyleSheet(f"color:{TEXT_H1}; font-family:Consolas; font-size:9pt;")
         raw = getattr(self._smeter, "_value", 0)
         if raw == 0 and hasattr(self, "_live_source"):
             raw = self._live_source()
@@ -1788,6 +1812,8 @@ class SMeterCalibDialog(QDialog):
 
     def _use_current(self, idx: int):
         """Sla de ACTUELE live waarde op als dit S-punt (directe call)."""
+        if not self._is_radio_connected():
+            return
         self._spins[idx].setValue(self._get_live())
 
     def _reset_defaults(self):
