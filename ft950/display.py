@@ -255,6 +255,7 @@ class DisplayPanel(QWidget):
 
     def set_mode(self, mode: str):
         self._mode_lbl.setText(mode)
+        self._vfd_b.set_mode(mode)
         # Update ook de mode-knoppen in de bovenste balk
         mode_upper = mode.upper().split("-")[0]   # "CW-R" → "CW", "FM-N" → "FM"
         for m, btn in self._mode_btns.items():

@@ -95,6 +95,18 @@ class VfdDisplay(QWidget):
         self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
         self.update()
 
+    def mouseMoveEvent(self, event):
+        if not self._hovered:
+            return
+        x_start, char_w = self._string_start_and_charwidth()
+        rel = event.position().x() - x_start
+        if rel >= 0:
+            idx = int(rel // char_w)
+            if 0 <= idx < len(self._DIGIT_STEPS) and self._DIGIT_STEPS[idx] is not None:
+                if idx != self._selected_char:
+                    self._selected_char = idx
+                    self.update()
+
     def mousePressEvent(self, event):
         if not self._hovered:
             return
@@ -186,7 +198,11 @@ class VfdDisplay(QWidget):
         x_after = int(x_start + len(s) * char_w) + 6
         p.drawText(x_after, y_base, "kHz")
 
-        # (stap-indicator verwijderd op verzoek)
+        # 4. "VFO-A" label — linksonder
+        tag_font = QFont("Segoe UI", 7)
+        p.setFont(tag_font)
+        p.setPen(QColor(VFD_DIM))
+        p.drawText(4, self.height() - 4, "VFO-A")
 
         p.end()
 
@@ -328,6 +344,7 @@ class SmallVfd(QWidget):
         self._selected    = 5        # standaard 1 kHz digit
         self._hovered     = False
         self._font_sz     = font_size
+        self._mode        = ""
         h = max(28, font_size * 2 + 10)
         self.setFixedHeight(h)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -347,6 +364,10 @@ class SmallVfd(QWidget):
         self._font_sz = max(8, min(28, pt))
         h = max(28, self._font_sz * 2 + 10)
         self.setFixedHeight(h)
+        self.update()
+
+    def set_mode(self, mode: str):
+        self._mode = mode
         self.update()
 
     def _freq_str(self) -> str:
@@ -379,6 +400,18 @@ class SmallVfd(QWidget):
             self._hovered = False
             self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px;")
             self.update()
+
+    def mouseMoveEvent(self, event):
+        if not self._interactive or not self._hovered:
+            return
+        _, _, x0, cw = self._char_metrics()
+        rel = event.position().x() - x0
+        if rel >= 0:
+            idx = int(rel // cw)
+            if 0 <= idx < len(self._DIGIT_STEPS) and self._DIGIT_STEPS[idx] is not None:
+                if idx != self._selected:
+                    self._selected = idx
+                    self.update()
 
     def mousePressEvent(self, event):
         if not self._interactive or not self._hovered:
@@ -438,9 +471,19 @@ class SmallVfd(QWidget):
             p.drawText(x, y_base, c)
 
         lbl_font = QFont("Segoe UI", 6)
+        lbl_fm   = QFontMetrics(lbl_font)
         p.setFont(lbl_font)
         p.setPen(QColor(VFD_DIM))
         p.drawText(3, self.height() - 2, self._label)
+
+        # Mode rechtsonder — amber als ingevuld
+        if self._mode:
+            mode_font = QFont("Consolas", 7, QFont.Bold)
+            p.setFont(mode_font)
+            p.setPen(QColor(VFD_AMBER))
+            mode_fm = QFontMetrics(mode_font)
+            p.drawText(self.width() - mode_fm.horizontalAdvance(self._mode) - 4,
+                       self.height() - 2, self._mode)
         p.end()
 
 
