@@ -1595,13 +1595,26 @@ class SMeterCalibDialog(QDialog):
       S1=18  S3=54  S5=90  S7=126  S9=162  +20=189  +40=216  +60=243
     """
 
+    # 24 kalibratiepunten: 8 intervallen × 3 blokjes
     _LABELS = [
-        "S 1","S 2","S 3","S 4","S 5","S 6","S 7","S 8","S 9",
-        "+10 dB","+20 dB","+30 dB","+40 dB","+50 dB","+60 dB",
+        "≤S1 ①",  "≤S1 ②",  "S 1",
+        "S2 ①",   "S2 ②",   "S 3",
+        "S4 ①",   "S4 ②",   "S 5",
+        "S6 ①",   "S6 ②",   "S 7",
+        "S8 ①",   "S8 ②",   "S 9",
+        "+10 ①",  "+10 ②",  "+20 dB",
+        "+30 ①",  "+30 ②",  "+40 dB",
+        "+50 ①",  "+50 ②",  "+60 dB",
     ]
     _DEFAULTS = [
-        18, 36, 54, 72, 90, 108, 126, 144, 162,
-        175, 189, 202, 216, 229, 243,
+         6,  12,  18,
+        30,  42,  54,
+        66,  78,  90,
+       102, 114, 126,
+       138, 150, 162,
+       171, 180, 189,
+       198, 207, 216,
+       225, 234, 243,
     ]
 
     def __init__(self, smeter_widget, current_cal: list, parent=None):
@@ -1609,7 +1622,7 @@ class SMeterCalibDialog(QDialog):
         self._smeter      = smeter_widget   # SMeterBar widget (live preview)
         self._current_raw = 0               # live ruwe waarde van radio
         self.setWindowTitle(tr("S-meter kalibratie"))
-        self.setFixedWidth(480)
+        self.setFixedWidth(560)
         self.setStyleSheet(_QSS_DIALOG)
         self._build(current_cal)
 
@@ -1637,32 +1650,44 @@ class SMeterCalibDialog(QDialog):
         lv.addWidget(self._live_lbl)
         root.addWidget(grp_live)
 
-        # Kalibratie-tabel
-        grp_cal = QGroupBox("S-punt kalibratie  (ruwe waarde 0–255)")
-        gv = QVBoxLayout(grp_cal); gv.setSpacing(4)
+        # Kalibratie-tabel: 2 kolommen, 12 rijen per kolom
+        grp_cal = QGroupBox("Kalibratie  (ruwe waarde 0–255)")
+        from PySide6.QtWidgets import QGridLayout as _GL
+        gc = _GL(grp_cal); gc.setSpacing(4)
+        gc.setColumnStretch(3, 1); gc.setColumnStretch(7, 1)
 
         self._spins: list[QSpinBox] = []
-        self._active_spin = 0   # index van gefocuste spinbox
+        self._active_spin = 0
+
+        _IS_MAIN = {2, 5, 8, 11, 14, 17, 20, 23}   # 3e blokje van elk interval
 
         for i, (lbl, val) in enumerate(zip(self._LABELS, cal)):
-            row = QHBoxLayout(); row.setSpacing(6)
+            col_base = 0 if i < 12 else 4   # linker/rechter kolom
+            row_pos  = i if i < 12 else i - 12
+
             lbl_w = QLabel(lbl)
-            lbl_w.setFixedWidth(56)
-            lbl_w.setStyleSheet(f"color:{TEXT_H1}; font-family:Consolas; font-size:8pt;")
+            lbl_w.setFixedWidth(60)
+            is_main = i in _IS_MAIN
+            lbl_w.setStyleSheet(
+                f"color:{'#FFCC66' if is_main else TEXT_H1};"
+                f"font-family:Consolas; font-size:8pt;"
+                f"{'font-weight:bold;' if is_main else ''}")
 
             spn = _spinbox(0, 255, val)
             spn.valueChanged.connect(self._on_spin_change)
             self._spins.append(spn)
 
-            btn_use = QPushButton("← Actueel"); btn_use.setFixedWidth(80)
+            btn_use = QPushButton("←"); btn_use.setFixedWidth(26)
             btn_use.setObjectName("test")
             btn_use.clicked.connect(lambda _, idx=i: self._use_current(idx))
-            btn_use.setToolTip("Sla de huidige live S-meter waarde op als dit S-punt")
+            btn_use.setToolTip("Gebruik actuele live waarde")
 
-            row.addWidget(lbl_w)
-            row.addWidget(spn, 1)
-            row.addWidget(btn_use)
-            gv.addLayout(row)
+            gc.addWidget(lbl_w,   row_pos, col_base)
+            gc.addWidget(spn,     row_pos, col_base + 1)
+            gc.addWidget(btn_use, row_pos, col_base + 2)
+            # separator kolom
+            if col_base == 0:
+                gc.setColumnMinimumWidth(3, 8)
 
         # Focus-filter: bijhouden welke spinbox actief is
         class _FocusFilter(QObject):
@@ -1724,8 +1749,10 @@ class SMeterCalibDialog(QDialog):
         self._preview.set_value(raw)
         # Bepaal welk S-punt dit ongeveer is
         cal = self.get_calibration()
-        labels = ["S1","S2","S3","S4","S5","S6","S7","S8","S9",
-                  "+10","+20","+30","+40","+50","+60"]
+        labels = ["≤S1①","≤S1②","S1","S2①","S2②","S3","S4①","S4②","S5",
+                  "S6①","S6②","S7","S8①","S8②","S9",
+                  "+10①","+10②","+20","+30①","+30②","+40",
+                  "+50①","+50②","+60"]
         level = "< S1"
         for i, r in enumerate(cal):
             if raw >= r:

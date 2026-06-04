@@ -221,10 +221,17 @@ class Ft950Config:
     ant_sel:        int  = 1        # 1 of 2
 
     # ── S-meter kalibratie ────────────────────────────────────────────────────
-    # 15 ruwe waarden (0-255): S1-S9 + +10/+20/+30/+40/+50/+60 dB
+    # 24 ruwe waarden (0-255): 8 intervallen × 3 blokjes
+    # Intervallen: 0→S1, S1→S3, S3→S5, S5→S7, S7→S9, S9→+20, +20→+40, +40→+60
     smeter_cal: list = field(default_factory=lambda: [
-        18, 36, 54, 72, 90, 108, 126, 144, 162,   # S1-S9
-        175, 189, 202, 216, 229, 243               # +10/+20/+30/+40/+50/+60
+         6,  12,  18,   # 0 → S1
+        30,  42,  54,   # S1 → S3
+        66,  78,  90,   # S3 → S5
+       102, 114, 126,   # S5 → S7
+       138, 150, 162,   # S7 → S9
+       171, 180, 189,   # S9 → +20 dB
+       198, 207, 216,   # +20 → +40 dB
+       225, 234, 243,   # +40 → +60 dB
     ])
 
     # ── Weergave-lettergroottes ───────────────────────────────────────────────────
@@ -255,16 +262,23 @@ def load_config() -> Ft950Config:
     except Exception:
         pass
 
-    # Migratie: 8-punts kalibratie (oud) → 15-punts via interpolatie
+    def _expand_to_24(main8):
+        """Interpoleer 8 hoofdmarkeringen naar 24 kalibratiepunten (3 per interval)."""
+        result = []
+        low = 0
+        for high in main8:
+            for k in range(3):
+                result.append(low + (high - low) * (k + 1) // 3)
+            low = high
+        return result
+
     if len(cfg.smeter_cal) == 8:
+        cfg.smeter_cal = _expand_to_24(cfg.smeter_cal)
+    elif len(cfg.smeter_cal) == 15:
+        # Pak de 8 hoofdmarkeringen uit de 15-punts kalibratie
         o = cfg.smeter_cal
-        cfg.smeter_cal = [
-            o[0], (o[0]+o[1])//2, o[1], (o[1]+o[2])//2, o[2],   # S1-S5
-            (o[2]+o[3])//2, o[3], (o[3]+o[4])//2, o[4],          # S6-S9
-            (o[4]+o[5])//2, o[5], (o[5]+o[6])//2,                 # +10/+20/+30
-            o[6], (o[6]+o[7])//2, o[7],                           # +40/+50/+60
-        ]
-    elif len(cfg.smeter_cal) != 15:
+        cfg.smeter_cal = _expand_to_24([o[0],o[2],o[4],o[6],o[8],o[10],o[12],o[14]])
+    elif len(cfg.smeter_cal) != 24:
         cfg.smeter_cal = Ft950Config.__dataclass_fields__['smeter_cal'].default_factory()
 
     return cfg
