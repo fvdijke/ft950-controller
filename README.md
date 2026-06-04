@@ -1,4 +1,4 @@
-<img width="1998" height="642" alt="Yaesu FT-950 Controller" src="https://github.com/user-attachments/assets/d98874fd-c5be-43dc-893d-91fc08ad5d18" />
+<img width="1997" height="649" alt="Yaesu FT-950 Controller" src="https://github.com/user-attachments/assets/2630d28d-6456-4b9c-9ffc-d189721ed67f" />
 
 # FT-950 Controller
 
