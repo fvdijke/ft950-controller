@@ -1661,17 +1661,26 @@ class SMeterCalibDialog(QDialog):
 
         _IS_MAIN = {2, 5, 8, 11, 14, 17, 20, 23}   # 3e blokje van elk interval
 
+        _BTN_STYLE = (
+            "QPushButton{background:#1A3A1A;color:#4CAF50;"
+            "border:1px solid #2A5A2A;border-radius:2px;"
+            "font-size:10pt;padding:0px;}"
+            "QPushButton:hover{background:#2A5A2A;}"
+        )
+
         for i, (lbl, val) in enumerate(zip(self._LABELS, cal)):
             col_base = 0 if i < 12 else 4   # linker/rechter kolom
             row_pos  = i if i < 12 else i - 12
 
-            lbl_w = QLabel(lbl)
-            lbl_w.setFixedWidth(60)
             is_main = i in _IS_MAIN
-            lbl_w.setStyleSheet(
-                f"color:{'#FFCC66' if is_main else TEXT_H1};"
-                f"font-family:Consolas; font-size:8pt;"
-                f"{'font-weight:bold;' if is_main else ''}")
+
+            # Label: alleen voor hoofdmarkeringen (geel), intermediair = leeg
+            lbl_w = QLabel(lbl if is_main else "")
+            lbl_w.setFixedWidth(50)
+            if is_main:
+                lbl_w.setStyleSheet(
+                    f"color:#FFCC66; font-family:Consolas;"
+                    f"font-size:8pt; font-weight:bold;")
 
             spn = _spinbox(0, 255, val)
             spn.valueChanged.connect(self._on_spin_change)
@@ -1679,19 +1688,13 @@ class SMeterCalibDialog(QDialog):
 
             btn_use = QPushButton("◄")
             btn_use.setFixedSize(30, 22)
-            btn_use.setObjectName("test")
-            btn_use.setStyleSheet(
-                f"QPushButton{{background:#1A3A1A;color:#4CAF50;"
-                f"border:1px solid #2A5A2A;border-radius:2px;"
-                f"font-size:10pt;padding:0px;}}"
-                f"QPushButton:hover{{background:#2A5A2A;}}")
+            btn_use.setStyleSheet(_BTN_STYLE)
             btn_use.clicked.connect(lambda _, idx=i: self._use_current(idx))
             btn_use.setToolTip("◄  Neem de huidige S-meter waarde van de radio over")
 
             gc.addWidget(lbl_w,   row_pos, col_base)
             gc.addWidget(spn,     row_pos, col_base + 1)
             gc.addWidget(btn_use, row_pos, col_base + 2)
-            # separator kolom
             if col_base == 0:
                 gc.setColumnMinimumWidth(3, 8)
 
@@ -1745,30 +1748,36 @@ class SMeterCalibDialog(QDialog):
         self._current_raw = raw
 
     def _get_live(self) -> int:
-        # Directe bron: de smeter-widget zelf heeft altijd de meest actuele waarde
+        # 1. De preview bar wordt elke 300ms bijgewerkt door _refresh_live
+        if self._current_raw > 0:
+            return self._current_raw
+        # 2. Directe waarde van de smeter-widget (hoofdvenster)
         val = getattr(self._smeter, "_value", 0)
         if val > 0:
             return val
-        # Fallback: callable live-source of intern bijgehouden waarde
+        # 3. Externe callable (fallback voor legacy API)
         if hasattr(self, "_live_source"):
             return self._live_source()
-        return self._current_raw
+        return 0
 
     def _refresh_live(self):
-        raw = self._get_live()
+        # Lees altijd direct van de smeter-widget zodat _current_raw bijgewerkt blijft
+        raw = getattr(self._smeter, "_value", 0)
+        if raw == 0 and hasattr(self, "_live_source"):
+            raw = self._live_source()
         self._current_raw = raw
         self._preview.set_value(raw)
-        # Bepaal welk S-punt dit ongeveer is
-        cal = self.get_calibration()
+        cal    = self.get_calibration()
         labels = ["≤S1①","≤S1②","S1","S2①","S2②","S3","S4①","S4②","S5",
                   "S6①","S6②","S7","S8①","S8②","S9",
                   "+10①","+10②","+20","+30①","+30②","+40",
                   "+50①","+50②","+60"]
-        level = "< S1"
+        level  = "< S1"
         for i, r in enumerate(cal):
             if raw >= r:
                 level = labels[i]
         self._live_lbl.setText(f"Ruwe waarde: {raw}   ≈ {level}")
+
 
     def _on_spin_change(self):
         cal = self.get_calibration()
