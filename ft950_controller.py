@@ -15,7 +15,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui     import QFont, QPalette, QColor
+from PySide6.QtGui     import QFont, QPalette, QColor, QFontDatabase
 from PySide6.QtCore    import Qt
 
 from ft950.config     import load_config
@@ -23,10 +23,24 @@ from ft950.i18n       import set_language
 from ft950.mainwindow import MainWindow
 
 
+def _load_bundled_fonts():
+    """Laad meegeleverde fonts zodat ze altijd beschikbaar zijn."""
+    base = (os.path.dirname(sys.executable)
+            if getattr(sys, "frozen", False)
+            else os.path.dirname(os.path.abspath(__file__)))
+    fonts_dir = os.path.join(base, "ft950", "fonts")
+    if os.path.isdir(fonts_dir):
+        for fname in os.listdir(fonts_dir):
+            if fname.lower().endswith((".ttf", ".otf")):
+                QFontDatabase.addApplicationFont(os.path.join(fonts_dir, fname))
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("FT-950 Controller")
     app.setOrganizationName("PA3FKV")
+
+    _load_bundled_fonts()
 
     # Uniform donker grijs kleurpalet
     DARK = "#1E1E1E"

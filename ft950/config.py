@@ -229,8 +229,8 @@ class Ft950Config:
     vfd_font:       int  = 34       # pt  grote frequentie-aanduiding
     vfob_font:      int  = 14       # pt  VFO-B display
     clar_font:      int  = 14       # pt  CLAR display
-    vfd_font_name:  str  = "Consolas"      # font-familie voor VFD-frequentieweergave
-    vfd_font_style: str  = "Bold Italic"   # "Normal" | "Bold" | "Italic" | "Bold Italic"
+    vfd_font_name:  str  = "Seven Segment"  # font-familie voor VFD-frequentieweergave
+    vfd_font_style: str  = "Bold"          # "Normal" | "Bold" | "Italic" | "Bold Italic"
 
     # ── Taal ─────────────────────────────────────────────────────────────────
     ui_language:    str  = "en"  # "nl" of "en"

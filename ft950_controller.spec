@@ -4,7 +4,7 @@ a = Analysis(
     ['ft950_controller.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('ft950/fonts', 'ft950/fonts')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
