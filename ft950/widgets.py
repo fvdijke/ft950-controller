@@ -732,13 +732,13 @@ class SMeterBar(QWidget):
         "", "", "+60",  # +40 → +60 dB
     ]
     _MARK_COLORS = [
-        "#00BB44","#00BB44","#00BB44",   # 0 → S1
-        "#44CC00","#44CC00","#44CC00",   # S1 → S3
-        "#88CC00","#88CC00","#88CC00",   # S3 → S5
-        "#CCCC00","#CCCC00","#CCCC00",   # S5 → S7
-        "#FFAA00","#FFAA00","#FFAA00",   # S7 → S9
-        "#FF8800","#FF8800","#FF8800",   # S9 → +20
-        "#FF4400","#FF4400","#FF4400",   # +20 → +40
+        "#A0A0A0","#A0A0A0","#A0A0A0",   # 0 → S1   (licht grijs)
+        "#A0A0A0","#A0A0A0","#A0A0A0",   # S1 → S3
+        "#A0A0A0","#A0A0A0","#A0A0A0",   # S3 → S5
+        "#A0A0A0","#A0A0A0","#A0A0A0",   # S5 → S7
+        "#A0A0A0","#A0A0A0","#A0A0A0",   # S7 → S9
+        "#FF2020","#FF2020","#FF2020",   # S9 → +20  (rood)
+        "#FF2020","#FF2020","#FF2020",   # +20 → +40
         "#FF2020","#FF2020","#FF2020",   # +40 → +60
     ]
     _DEFAULT_RAW = [
@@ -808,7 +808,7 @@ class SMeterBar(QWidget):
         PTR_H   = 8                  # hoogte voor wijzer bovenaan
         LBL_H   = 10                 # hoogte labels boven blokjes
         GAP     = self._BLOCK_GAP
-        blk_w   = max(2, (w - LBL_W - GAP * (N - 1)) // N)
+        blk_w   = max(2, min(6, (w - LBL_W - GAP * (N - 1)) // N // 2))
         blk_h   = max(4, (h - PTR_H - LBL_H - 4) // 3)
         lbl_y   = PTR_H              # labels beginnen na wijzerzone
         blk_y   = PTR_H + LBL_H + 2
@@ -826,24 +826,21 @@ class SMeterBar(QWidget):
 
         marks = self._MARKS
 
-        # Indices die een label krijgen: S1,S3,S5,S7,S9,+20,+40,+60
-        _LABELED = {0, 2, 4, 6, 8, 10, 12, 14}
-
         for i, (raw, lbl, mark_col) in enumerate(marks):
             bx     = x0 + i * (blk_w + GAP)
             active = self._value >= raw
             is_sel = (i == self._active_block)
             on_col = QColor(mark_col)
 
-            # Inactief: donkere tint van blokkleur zodat rood zichtbaar blijft
+            # Inactive: zichtbare donkere tint van eigen kleur
             if is_sel:
-                col  = on_col.lighter(170)
+                col  = on_col.lighter(160)
                 glow = col.lighter(120)
             elif active:
                 col  = on_col
                 glow = on_col.lighter(130)
             else:
-                col  = on_col.darker(700)   # ~14% helderheid, behoudt kleurindruk
+                col  = on_col.darker(350)   # ~29% helderheid, duidelijk zichtbaar
                 glow = col
 
             p.fillRect(bx, blk_y, blk_w, blk_h, col)
@@ -854,13 +851,13 @@ class SMeterBar(QWidget):
 
             # Rand
             p.setPen(QPen(QColor("#FFFFFF") if is_sel
-                          else (on_col.lighter(150) if active else on_col.darker(400)), 1))
+                          else (on_col.lighter(150) if active else on_col.darker(200)), 1))
             p.drawRect(bx, blk_y, blk_w - 1, blk_h - 1)
 
-            # Label: alleen voor de hoofdmarkeringen
-            if i in _LABELED:
+            # Label: alleen als het een niet-lege string is
+            if lbl:
                 p.setPen(QColor("#FFFFFF") if is_sel
-                         else (on_col if active else QColor(TEXT_DIM)))
+                         else (on_col.lighter(130) if active else QColor(TEXT_DIM)))
                 lw = lfm.horizontalAdvance(lbl)
                 tx = bx + (blk_w - lw) // 2
                 p.drawText(tx, lbl_y + lfm.ascent(), lbl)
