@@ -432,11 +432,14 @@ class SmallVfd(QWidget):
     • sig_freq_changed wordt geëmit bij elke wijziging (alleen als interactive=True)
     """
 
-    sig_freq_changed = Signal(int)
+    sig_freq_changed  = Signal(int)
+    sig_mode_request  = Signal(str)   # emits gekozen mode via rechtsklik-menu
 
     _DIGIT_STEPS = [10_000_000, 1_000_000, None,
                     100_000, 10_000, 1_000, None,
                     100, 10, 1]
+
+    _MODES = ["LSB", "USB", "CW", "FM", "AM", "RTTY", "CW-R", "PKT-L"]
 
     def __init__(self, label="VFO-B", interactive: bool = False,
                  font_size: int = 14, parent=None):
@@ -558,6 +561,23 @@ class SmallVfd(QWidget):
         if idx is not None:
             self._selected = idx
             self.update()
+
+    def contextMenuEvent(self, event):
+        """Rechtsklik → mode kiezen voor VFO-B."""
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{ background:#2A2A2A; color:#DCDCDC;
+                     border:1px solid #555; font-size:8pt; }}
+            QMenu::item:selected {{ background:#C8A430; color:#000; }}
+        """)
+        for m in self._MODES:
+            act = menu.addAction(m)
+            if m == self._mode:
+                act.setEnabled(False)
+        chosen = menu.exec(event.globalPos())
+        if chosen:
+            self.sig_mode_request.emit(chosen.text())
 
     def wheelEvent(self, event):
         if not self._interactive or not self._hovered or self._freq_hz == 0:

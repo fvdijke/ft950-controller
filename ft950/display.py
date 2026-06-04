@@ -133,6 +133,7 @@ class DisplayPanel(QWidget):
     sig_freq_b_changed = Signal(int)   # VFO-B afstemming via scrollwiel
     sig_band           = Signal(str)
     sig_mode           = Signal(str)
+    sig_mode_b         = Signal(str)   # VFO-B mode via rechtsklik-menu
 
     _BANDS = [
         ("1.8",  "160m"), ("3.5", "80m"),  ("7",   "40m"),
@@ -226,6 +227,7 @@ class DisplayPanel(QWidget):
         # ── Rij 3: VFO-B ─────────────────────────────────────────────────────
         self._vfd_b = SmallVfd("VFO-B", interactive=True, font_size=self._vfob_font)
         self._vfd_b.sig_freq_changed.connect(self.sig_freq_b_changed)
+        self._vfd_b.sig_mode_request.connect(self.sig_mode_b)
         root.addWidget(self._vfd_b)
 
     # ── Publieke update-methoden ──────────────────────────────────────────────
@@ -241,11 +243,12 @@ class DisplayPanel(QWidget):
 
     def set_mode(self, mode: str):
         self._vfd_a.set_mode(mode)
-        self._vfd_b.set_mode(mode)
-        # Update ook de mode-knoppen in de bovenste balk
         mode_upper = mode.upper().split("-")[0]   # "CW-R" → "CW", "FM-N" → "FM"
         for m, btn in self._mode_btns.items():
             btn.setChecked(m == mode_upper or m == mode)
+
+    def set_mode_b(self, mode: str):
+        self._vfd_b.set_mode(mode)
 
     def set_band(self, band: str):
         """Markeer de actieve band in de bovenste balk."""

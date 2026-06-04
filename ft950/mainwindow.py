@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         # Band/mode vanuit de display-balk
         self._display.sig_band.connect(self._on_band)
         self._display.sig_mode.connect(self._on_mode)
+        self._display.sig_mode_b.connect(self._on_mode_b)
 
         # Herstel alle opgeslagen instellingen
         self._restore_all_settings()
@@ -446,7 +447,7 @@ class MainWindow(QMainWindow):
                 m = last_state["mode_b"]
                 if m != self._mode_b:
                     self._mode_b = m
-                    self._display._vfd_b.set_mode(m)
+                    self._display.set_mode_b(m)
 
         # ── Meter-queue (smeter / tx-meters / agc) ────────────────────────────
         while not self._meter_queue.empty():
@@ -753,6 +754,15 @@ class MainWindow(QMainWindow):
         self._display.set_mode(mode)   # update ook de bovenste modusknoppen
         self._sb_mode.setText(mode)
         self._mode = mode
+
+    def _on_mode_b(self, mode: str):
+        """Stel VFO-B mode in via VS1; MD0X; VS0; sequentie."""
+        self._mode_b = mode
+        self._display.set_mode_b(mode)
+        if self._cat.connected:
+            self._cat.send_raw("VS1;")          # selecteer VFO-B
+            self._cat.set_mode(mode)            # stel mode in
+            self._cat.send_raw("VS0;")          # terug naar VFO-A
 
     def _step_up(self, step: int):
         self._set_freq(self._freq + step)
