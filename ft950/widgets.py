@@ -486,7 +486,7 @@ class SmallVfd(QWidget):
     def _compute_7seg_layout(self) -> dict:
         fm      = QFontMetrics(QFont("Consolas", self._font_sz, QFont.Bold))
         seg_h   = fm.height()
-        seg_w   = max(8,  int(seg_h * 0.52))
+        seg_w   = max(10, int(seg_h * 0.65))   # breder = dikkere segmenten
         gap     = max(2,  seg_w // 7)
         dot_w   = max(5,  int(seg_w * 0.28)) + gap
 

@@ -1780,6 +1780,10 @@ class _FreqDisplay(QWidget):
         if s:
             xr = (self.width() - fm.horizontalAdvance(s)) // 2
             p.setPen(QColor(VFD_BRIGHT)); p.drawText(xr, y, s)
+        else:
+            placeholder = "--.---.---"
+            xp = (self.width() - fm.horizontalAdvance(placeholder)) // 2
+            p.setPen(QColor(VFD_DIM));    p.drawText(xp, y, placeholder)
         lf = QFont("Consolas", 9)
         p.setFont(lf); p.setPen(QColor(VFD_DIM))
         lfm = QFontMetrics(lf)
