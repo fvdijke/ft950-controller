@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from .theme   import (BG_DISPLAY, BG_PANEL, BG_SURFACE, VFD_BRIGHT, VFD_DIM,
                       VFD_AMBER, VFD_OFF, LED_GREEN, LED_RED, LED_ORANGE,
                       TEXT_H1, TEXT_DIM, BORDER, ACCENT)
-from .widgets import VfdDisplay, SmallVfd, SMeterBar, StatusBadge, ModeLabel
+from .widgets import VfdDisplay, SmallVfd, SMeterBar, StatusBadge
 
 
 # ── Compacte block-diagram cel (tekst-only) ────────────────────────────────────
@@ -209,19 +209,10 @@ class DisplayPanel(QWidget):
         self._badge_fast  = StatusBadge("FAST",  LED_ORANGE)
         self._badge_lock  = StatusBadge("LOCK",  LED_ORANGE)
 
-        # ── Rij 1: [Mode] [BIG VFD] — mode VOOR de frequentie ───────────────
-        row3 = QHBoxLayout()
-        row3.setSpacing(6)
-
-        self._mode_lbl = ModeLabel()
-        self._mode_lbl.setFixedWidth(70)
-
+        # ── Rij 1: VFO-A (mode + freq + kHz in eigen kader) ─────────────────
         self._vfd_a = VfdDisplay(font_size=34)
         self._vfd_a.sig_freq_changed.connect(self.sig_freq_changed)
-
-        row3.addWidget(self._mode_lbl)
-        row3.addWidget(self._vfd_a, 1)
-        root.addLayout(row3, 1)   # stretch=1 → neemt resterende hoogte
+        root.addWidget(self._vfd_a, 1)   # stretch=1 → neemt resterende hoogte
 
         # ── Rij 2: S-meter — ONDER de frequentie, niet volledige breedte ─────
         meter_row = QHBoxLayout()
@@ -249,7 +240,7 @@ class DisplayPanel(QWidget):
         pass  # CLAR-display verwijderd
 
     def set_mode(self, mode: str):
-        self._mode_lbl.setText(mode)
+        self._vfd_a.set_mode(mode)
         self._vfd_b.set_mode(mode)
         # Update ook de mode-knoppen in de bovenste balk
         mode_upper = mode.upper().split("-")[0]   # "CW-R" → "CW", "FM-N" → "FM"

@@ -54,6 +54,7 @@ class VfdDisplay(QWidget):
         self._font_sz       = font_size
         self._selected_char = 5          # default: 1 kHz digit
         self._hovered       = False      # muis zweeft erover
+        self._mode          = "USB"
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
@@ -82,17 +83,18 @@ class VfdDisplay(QWidget):
         self.update()
         self.sig_freq_changed.emit(new_hz)
 
+    def set_mode(self, mode: str):
+        self._mode = mode
+        self.update()
+
     # ── Muis-events ───────────────────────────────────────────────────────────
 
     def enterEvent(self, event):
         self._hovered = True
-        self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px; "
-                           f"border: 1px solid {ACCENT};")
         self.update()
 
     def leaveEvent(self, event):
         self._hovered = False
-        self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:4px;")
         self.update()
 
     def mouseMoveEvent(self, event):
@@ -139,70 +141,103 @@ class VfdDisplay(QWidget):
         return f"{mhz:2d}.{khz:03d}.{hz_r:03d}"
 
     def _string_start_and_charwidth(self) -> tuple[int, int]:
-        font   = QFont("Consolas", self._font_sz, QFont.Bold)
-        fm     = QFontMetrics(font)
-        s      = self._freq_str()
-        total  = fm.horizontalAdvance(s)
-        x_start= (self.width() - total) // 2
-        char_w = fm.horizontalAdvance("0")   # monospace → alle tekens gelijke breedte
-        return x_start, char_w
+        freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
+        freq_fm   = QFontMetrics(freq_font)
+        freq_w    = freq_fm.horizontalAdvance(self._freq_str())
+        char_w    = freq_fm.horizontalAdvance("0")
+        aux_font  = QFont("Consolas", max(9, int(self._font_sz * 0.4)), QFont.Bold)
+        aux_fm    = QFontMetrics(aux_font)
+        mode_w    = aux_fm.horizontalAdvance(self._mode) + 12 if self._mode else 0
+        kHz_w     = aux_fm.horizontalAdvance("kHz") + 8
+        total_w   = mode_w + freq_w + kHz_w
+        freq_x    = (self.width() - total_w) // 2 + mode_w
+        return freq_x, char_w
 
     # ── Tekenen ───────────────────────────────────────────────────────────────
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+
+        # ── Achtergrond ───────────────────────────────────────────────────────
         p.fillRect(self.rect(), QColor(BG_DISPLAY))
 
-        font   = QFont("Consolas", self._font_sz, QFont.Bold)
-        p.setFont(font)
-        fm     = QFontMetrics(font)
-        s      = self._freq_str()
-        ghost  = "88.888.888"
+        # ── Kader ─────────────────────────────────────────────────────────────
+        border_col = QColor(ACCENT if self._hovered else VFD_DIM)
+        p.setPen(QPen(border_col, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 4, 4)
 
-        total  = fm.horizontalAdvance(s)
-        x_start= (self.width() - total) // 2
-        char_w = fm.horizontalAdvance("0")
+        # ── "VFO-A" linksbovenin, snijdt het kader door ───────────────────────
+        tag_font = QFont("Segoe UI", 7, QFont.Bold)
+        tag_fm   = QFontMetrics(tag_font)
+        tag_text = "VFO-A"
+        tag_w    = tag_fm.horizontalAdvance(tag_text) + 6
+        tag_h    = tag_fm.height()
+        p.fillRect(8, 0, tag_w, tag_h, QColor(BG_DISPLAY))
+        p.setFont(tag_font)
+        p.setPen(border_col)
+        p.drawText(10, tag_fm.ascent(), tag_text)
 
-        # Verticaal centreren
-        y_base = (self.height() - fm.height()) // 2 + fm.ascent()
-        y_base = max(fm.ascent() + 4, y_base)
+        # ── Metriek ───────────────────────────────────────────────────────────
+        freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
+        freq_fm   = QFontMetrics(freq_font)
+        freq_str  = self._freq_str()
+        freq_w    = freq_fm.horizontalAdvance(freq_str)
+        char_w    = freq_fm.horizontalAdvance("0")
 
-        # 1. Ghost-segmenten (donkergroen)
-        for i, gc in enumerate(ghost):
+        aux_sz    = max(9, int(self._font_sz * 0.4))
+        aux_font  = QFont("Consolas", aux_sz, QFont.Bold)
+        aux_fm    = QFontMetrics(aux_font)
+
+        mode_text = self._mode
+        mode_w    = aux_fm.horizontalAdvance(mode_text) + 12 if mode_text else 0
+        kHz_w     = aux_fm.horizontalAdvance("kHz")
+        kHz_gap   = 8
+
+        total_w  = mode_w + freq_w + kHz_gap + kHz_w
+        group_x  = (self.width() - total_w) // 2
+        freq_x   = group_x + mode_w
+        kHz_x    = freq_x + freq_w + kHz_gap
+
+        content_top = tag_h + 2
+        content_h   = self.height() - content_top - 4
+        y_base = content_top + (content_h - freq_fm.height()) // 2 + freq_fm.ascent()
+        y_base = max(content_top + freq_fm.ascent(), y_base)
+
+        # ── Ghost ─────────────────────────────────────────────────────────────
+        p.setFont(freq_font)
+        for i, gc in enumerate("88.888.888"):
             p.setPen(QColor(VFD_OFF))
-            p.drawText(int(x_start + i * char_w), y_base, gc)
+            p.drawText(int(freq_x + i * char_w), y_base, gc)
 
-        # 2. Echte tekens; digit-highlight alleen bij hover
-        for i, c in enumerate(s):
-            x    = int(x_start + i * char_w)
-
+        # ── Frequentie-digits ─────────────────────────────────────────────────
+        for i, c in enumerate(freq_str):
+            x = int(freq_x + i * char_w)
             if self._hovered and i == self._selected_char:
-                # Highlight-blokje achter geselecteerde digit
-                box_top = y_base - fm.ascent()
-                p.fillRect(x - 1, box_top, char_w + 2, fm.height(), QColor("#1A1400"))
+                box_top = y_base - freq_fm.ascent()
+                p.fillRect(x - 1, box_top, char_w + 2, freq_fm.height(), QColor("#1A1400"))
                 p.setPen(QPen(QColor(VFD_AMBER), 1))
-                p.drawRect(x - 1, box_top, char_w + 1, fm.height() - 1)
+                p.drawRect(x - 1, box_top, char_w + 1, freq_fm.height() - 1)
                 p.setPen(QColor(VFD_AMBER))
             elif c == '.':
                 p.setPen(QColor(VFD_DIM))
             else:
                 p.setPen(QColor(VFD_BRIGHT))
-
             p.drawText(x, y_base, c)
 
-        # 3. "kHz" direct na de laatste frequentie-digit (zelfde basislijn)
-        lbl_font = QFont("Consolas", int(self._font_sz * 0.45), QFont.Bold)
-        p.setFont(lbl_font)
-        p.setPen(QColor(VFD_DIM))
-        x_after = int(x_start + len(s) * char_w) + 6
-        p.drawText(x_after, y_base, "kHz")
+        # ── Mode voor frequentie (amber) ──────────────────────────────────────
+        if mode_text:
+            p.setFont(aux_font)
+            p.setPen(QColor(VFD_AMBER))
+            aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
+            p.drawText(group_x, aux_y, mode_text)
 
-        # 4. "VFO-A" label — linksonder
-        tag_font = QFont("Segoe UI", 7)
-        p.setFont(tag_font)
+        # ── kHz na frequentie (dim) ───────────────────────────────────────────
+        p.setFont(aux_font)
         p.setPen(QColor(VFD_DIM))
-        p.drawText(4, self.height() - 4, "VFO-A")
+        aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
+        p.drawText(kHz_x, aux_y, "kHz")
 
         p.end()
 
@@ -345,10 +380,10 @@ class SmallVfd(QWidget):
         self._hovered     = False
         self._font_sz     = font_size
         self._mode        = ""
-        h = max(28, font_size * 2 + 10)
+        h = max(44, font_size * 2 + 22)
         self.setFixedHeight(h)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px;")
+        self.setStyleSheet(f"background:{BG_DISPLAY};")
         if interactive:
             self.setCursor(Qt.PointingHandCursor)
             self.setFocusPolicy(Qt.WheelFocus)
@@ -362,7 +397,7 @@ class SmallVfd(QWidget):
 
     def set_font_size(self, pt: int):
         self._font_sz = max(8, min(28, pt))
-        h = max(28, self._font_sz * 2 + 10)
+        h = max(44, self._font_sz * 2 + 22)
         self.setFixedHeight(h)
         self.update()
 
@@ -380,25 +415,26 @@ class SmallVfd(QWidget):
         return f"{mhz:2d}.{khz:03d}.{hzr:03d}"
 
     def _char_metrics(self):
-        font = QFont("Consolas", self._font_sz, QFont.Bold)
-        fm   = QFontMetrics(font)
-        s    = "88.888.888"
-        total = fm.horizontalAdvance(s)
-        x0    = (self.width() - total) // 2
-        cw    = fm.horizontalAdvance("0")
-        return font, fm, x0, cw
+        freq_font = QFont("Consolas", self._font_sz, QFont.Bold)
+        freq_fm   = QFontMetrics(freq_font)
+        freq_w    = freq_fm.horizontalAdvance(self._freq_str())
+        cw        = freq_fm.horizontalAdvance("0")
+        aux_sz    = max(6, int(self._font_sz * 0.6))
+        aux_fm    = QFontMetrics(QFont("Consolas", aux_sz, QFont.Bold))
+        mode_w    = aux_fm.horizontalAdvance(self._mode) + 8 if self._mode else 0
+        kHz_w     = aux_fm.horizontalAdvance("kHz") + 6
+        total_w   = mode_w + freq_w + kHz_w
+        freq_x    = (self.width() - total_w) // 2 + mode_w
+        return freq_font, freq_fm, freq_x, cw
 
     def enterEvent(self, event):
         if self._interactive:
             self._hovered = True
-            self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px; "
-                               f"border: 1px solid {ACCENT};")
             self.update()
 
     def leaveEvent(self, event):
         if self._interactive:
             self._hovered = False
-            self.setStyleSheet(f"background:{BG_DISPLAY}; border-radius:3px;")
             self.update()
 
     def mouseMoveEvent(self, event):
@@ -440,29 +476,58 @@ class SmallVfd(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), QColor(BG_DISPLAY))
 
-        font, fm, xr, cw = self._char_metrics()
-        text  = self._freq_str()
-        ghost = "88.888.888"
+        # ── Kader ─────────────────────────────────────────────────────────────
+        border_col = QColor(ACCENT if (self._interactive and self._hovered) else VFD_DIM)
+        p.setPen(QPen(border_col, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 3, 3)
 
-        y_base = (self.height() - fm.height()) // 2 + fm.ascent()
-        y_base = max(fm.ascent() + 2, y_base)
+        # ── Label linksbovenin, snijdt het kader door ────────────────────────
+        tag_font = QFont("Segoe UI", 6, QFont.Bold)
+        tag_fm   = QFontMetrics(tag_font)
+        tag_w    = tag_fm.horizontalAdvance(self._label) + 6
+        tag_h    = tag_fm.height()
+        p.fillRect(6, 0, tag_w, tag_h, QColor(BG_DISPLAY))
+        p.setFont(tag_font)
+        p.setPen(border_col)
+        p.drawText(8, tag_fm.ascent(), self._label)
 
-        p.setFont(font)
+        # ── Metriek ───────────────────────────────────────────────────────────
+        freq_font, freq_fm, freq_x, cw = self._char_metrics()
+        freq_str  = self._freq_str()
+        freq_w    = freq_fm.horizontalAdvance(freq_str)
 
-        # 1. Ghost (VFD_OFF) per karakter
-        for i, gc in enumerate(ghost):
+        aux_sz    = max(6, int(self._font_sz * 0.6))
+        aux_font  = QFont("Consolas", aux_sz, QFont.Bold)
+        aux_fm    = QFontMetrics(aux_font)
+
+        mode_text = self._mode
+        mode_w    = aux_fm.horizontalAdvance(mode_text) + 8 if mode_text else 0
+        kHz_gap   = 6
+        kHz_x     = freq_x + freq_w + kHz_gap
+        group_x   = freq_x - mode_w
+
+        content_top = tag_h + 1
+        content_h   = self.height() - content_top - 3
+        y_base = content_top + (content_h - freq_fm.height()) // 2 + freq_fm.ascent()
+        y_base = max(content_top + freq_fm.ascent(), y_base)
+
+        # ── Ghost ─────────────────────────────────────────────────────────────
+        p.setFont(freq_font)
+        for i, gc in enumerate("88.888.888"):
             p.setPen(QColor(VFD_OFF))
-            p.drawText(int(xr + i * cw), y_base, gc)
+            p.drawText(int(freq_x + i * cw), y_base, gc)
 
-        # 2. Echte tekens per karakter — geselecteerde digit bij hover in amber
+        # ── Frequentie-digits ─────────────────────────────────────────────────
         hovering = self._interactive and self._hovered and self._freq_hz > 0
-        for i, c in enumerate(text):
-            x = int(xr + i * cw)
+        for i, c in enumerate(freq_str):
+            x = int(freq_x + i * cw)
             if hovering and i == self._selected:
-                # achtergrondblokje
-                p.fillRect(x, 2, int(cw), self.height() - 4, QColor(ACCENT + "33"))
+                box_top = y_base - freq_fm.ascent()
+                p.fillRect(x, box_top, int(cw), freq_fm.height(), QColor(ACCENT + "33"))
                 p.setPen(QColor(ACCENT))
             elif c == '.':
                 p.setPen(QColor(VFD_OFF))
@@ -470,20 +535,19 @@ class SmallVfd(QWidget):
                 p.setPen(QColor(VFD_DIM))
             p.drawText(x, y_base, c)
 
-        lbl_font = QFont("Segoe UI", 6)
-        lbl_fm   = QFontMetrics(lbl_font)
-        p.setFont(lbl_font)
-        p.setPen(QColor(VFD_DIM))
-        p.drawText(3, self.height() - 2, self._label)
-
-        # Mode rechtsonder — amber als ingevuld
-        if self._mode:
-            mode_font = QFont("Consolas", 7, QFont.Bold)
-            p.setFont(mode_font)
+        # ── Mode voor frequentie (amber) ──────────────────────────────────────
+        if mode_text:
+            p.setFont(aux_font)
             p.setPen(QColor(VFD_AMBER))
-            mode_fm = QFontMetrics(mode_font)
-            p.drawText(self.width() - mode_fm.horizontalAdvance(self._mode) - 4,
-                       self.height() - 2, self._mode)
+            aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
+            p.drawText(group_x, aux_y, mode_text)
+
+        # ── kHz na frequentie (dim) ───────────────────────────────────────────
+        p.setFont(aux_font)
+        p.setPen(QColor(VFD_DIM))
+        aux_y = content_top + (content_h - aux_fm.height()) // 2 + aux_fm.ascent()
+        p.drawText(kHz_x, aux_y, "kHz")
+
         p.end()
 
 
