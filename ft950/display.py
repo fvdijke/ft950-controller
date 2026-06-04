@@ -232,15 +232,10 @@ class DisplayPanel(QWidget):
         meter_row.addStretch()
         root.addLayout(meter_row)
 
-        # ── Rij 3: VFO-B (boven) + CLAR (eronder) gestapeld ─────────────────
-        vfo_col = QVBoxLayout()
-        vfo_col.setSpacing(2)
-        self._vfd_b    = SmallVfd("VFO-B", interactive=True, font_size=self._vfob_font)
+        # ── Rij 3: VFO-B ─────────────────────────────────────────────────────
+        self._vfd_b = SmallVfd("VFO-B", interactive=True, font_size=self._vfob_font)
         self._vfd_b.sig_freq_changed.connect(self.sig_freq_b_changed)
-        self._vfd_clar = SmallVfd("CLAR", font_size=self._clar_font)
-        vfo_col.addWidget(self._vfd_b)
-        vfo_col.addWidget(self._vfd_clar)
-        root.addLayout(vfo_col)
+        root.addWidget(self._vfd_b)
 
     # ── Publieke update-methoden ──────────────────────────────────────────────
 
@@ -251,7 +246,7 @@ class DisplayPanel(QWidget):
         self._vfd_b.set_freq(hz)
 
     def set_clar_offset(self, hz: int):
-        self._vfd_clar.set_freq(abs(hz))
+        pass  # CLAR-display verwijderd
 
     def set_mode(self, mode: str):
         self._mode_lbl.setText(mode)

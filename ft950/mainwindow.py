@@ -974,12 +974,6 @@ class MainWindow(QMainWindow):
         vb.addWidget(spn_vfob)
         gl2.addLayout(vb)
 
-        cc = QVBoxLayout()
-        cc.addWidget(QLabel(tr("CLAR:")))
-        spn_clar = _spn(8, 28, self._cfg.clar_font, " pt")
-        spn_clar.valueChanged.connect(lambda v: self._display._vfd_clar.set_font_size(v))
-        cc.addWidget(spn_clar)
-        gl2.addLayout(cc)
         root.addWidget(grp2)
 
         btn_row = QHBoxLayout()
@@ -994,7 +988,6 @@ class MainWindow(QMainWindow):
             self._cfg.band_btn_font = spn_btn.value()
             self._cfg.vfd_font      = spn_vfd.value()
             self._cfg.vfob_font     = spn_vfob.value()
-            self._cfg.clar_font     = spn_clar.value()
             save_config(self._cfg)
             dlg.accept()
 
@@ -1002,7 +995,6 @@ class MainWindow(QMainWindow):
             self._display.set_btn_font(self._cfg.band_btn_font)
             self._display.set_vfd_font(self._cfg.vfd_font)
             self._display._vfd_b.set_font_size(self._cfg.vfob_font)
-            self._display._vfd_clar.set_font_size(self._cfg.clar_font)
             dlg.reject()
 
         btn_ok.clicked.connect(_save)
