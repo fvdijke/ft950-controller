@@ -541,10 +541,32 @@ class MainWindow(QMainWindow):
         self._tx_blink_state = not self._tx_blink_state
         self._display._badge_tx.set_active(self._tx_blink_state)
 
+    @staticmethod
+    def _hz_to_mode(hz: int) -> str | None:
+        """Geeft de standaard mode terug voor een frequentie (op basis van band)."""
+        for lo, hi, mode in (
+            (1_800_000,  2_000_000,  "LSB"),   # 160m
+            (3_500_000,  4_000_000,  "LSB"),   # 80m
+            (7_000_000,  7_300_000,  "LSB"),   # 40m
+            (10_100_000, 10_150_000, "CW"),    # 30m
+            (14_000_000, 14_350_000, "USB"),   # 20m
+            (18_068_000, 18_168_000, "USB"),   # 17m
+            (21_000_000, 21_450_000, "USB"),   # 15m
+            (24_890_000, 24_990_000, "USB"),   # 12m
+            (28_000_000, 29_700_000, "USB"),   # 10m
+            (50_000_000, 54_000_000, "FM"),    # 6m
+        ):
+            if lo <= hz <= hi:
+                return mode
+        return None
+
     def _on_freq_b_changed(self, hz: int):
-        """VFO-B gewijzigd via scrollwiel → stuur FB; naar radio."""
+        """VFO-B gewijzigd via scrollwiel → stuur FB; naar radio + auto-mode."""
         if self._cat.connected:
             self._cat.set_freq_b(hz)
+        mode = self._hz_to_mode(hz)
+        if mode and mode != self._mode_b:
+            self._on_mode_b(mode)
 
     def _on_mox(self, on: bool):
         self._ptt_from_gui = on
