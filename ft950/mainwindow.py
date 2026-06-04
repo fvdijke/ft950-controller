@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         self._display.set_freq_a(self._freq)
         self._display.set_freq_b(cfg.last_vfob_hz)
         self._display.set_mode(self._mode)
+        self._display.set_mode_b(self._mode_b)
         self._display.set_band(cfg.last_band)
 
         # Koppel display freq-signaal (VFD klik/scroll + knop) aan set_freq

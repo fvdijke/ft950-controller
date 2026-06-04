@@ -39,7 +39,7 @@ def _draw_7seg_char(p: QPainter, x: int, y: int, sw: int, sh: int,
     Horizontale segmenten: zeshoek met afgeschuinde linker- en rechterhoeken.
     Verticale segmenten: zeshoek met afgeschuinde boven- en onderhoeken.
     """
-    t    = max(3, sw // 4)      # segmentdikte
+    t    = max(4, sw // 3)      # segmentdikte (⅓ van breedte)
     bv   = max(1, t * 2 // 5)  # bevel: afschuining aan de uiteinden
     g    = max(1, t // 5)       # spleet tussen segmenten
     half = sh // 2
@@ -489,7 +489,7 @@ class SmallVfd(QWidget):
     def _compute_7seg_layout(self) -> dict:
         fm      = QFontMetrics(QFont("Consolas", self._font_sz, QFont.Bold))
         seg_h   = fm.height()
-        seg_w   = max(10, int(seg_h * 0.65))   # breder = dikkere segmenten
+        seg_w   = max(11, int(seg_h * 0.75))   # breder = dikkere segmenten
         gap     = max(2,  seg_w // 7)
         dot_w   = max(5,  int(seg_w * 0.28)) + gap
 
