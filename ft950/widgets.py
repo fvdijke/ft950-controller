@@ -31,51 +31,60 @@ _7SEG_MAP = {
     '9': 'abcdfg',  '-': 'g',     ' ': '',
 }
 
+# Italic shear: bovenkant van elk digit verschuift naar rechts
+# 0.0 = rechtop, 0.15 ≈ 8.5°, 0.20 ≈ 11°
+_7SEG_SHEAR = 0.17
+
 
 def _draw_7seg_char(p: QPainter, x: int, y: int, sw: int, sh: int,
                     char: str, on_col: str, off_col: str):
     """
-    Teken één 7-segment karakter met afgeschuinde (hexagonale) segmenten.
-    Horizontale segmenten: zeshoek met afgeschuinde linker- en rechterhoeken.
-    Verticale segmenten: zeshoek met afgeschuinde boven- en onderhoeken.
+    Teken één 7-segment karakter met afgeschuinde (hexagonale) segmenten
+    en italic shear (bovenkant rechts, onderkant op originele x-positie).
     """
     t    = max(4, (sw + 2) // 4)  # segmentdikte (~27% van breedte)
-    bv   = max(1, t * 2 // 5)  # bevel: afschuining aan de uiteinden
-    g    = max(1, t // 5)       # spleet tussen segmenten
+    bv   = max(1, t * 2 // 5)    # bevel aan de uiteinden
+    g    = max(1, t // 5)         # spleet tussen segmenten
     half = sh // 2
     active = set(_7SEG_MAP.get(char, ''))
 
-    def h_poly(sx, sy, w, h):
-        """Horizontaal zeshoekig segment."""
-        b = min(bv, h // 2 - 1, w // 2 - 1)
-        return QPolygon([
-            QPoint(sx + b + g,     sy + g),
-            QPoint(sx + w - b - g, sy + g),
-            QPoint(sx + w - g,     sy + h // 2),
-            QPoint(sx + w - b - g, sy + h - g),
-            QPoint(sx + b + g,     sy + h - g),
-            QPoint(sx + g,         sy + h // 2),
-        ])
+    # Italic shear: elke punt verschuift naar rechts naarmate hij hoger zit.
+    # Onderkant (y + sh) = referentie (nul verschuiving).
+    bottom_y = y + sh
+    def sx(px: int, py: int) -> int:
+        return px + int(_7SEG_SHEAR * (bottom_y - py))
 
-    def v_poly(sx, sy, w, h):
-        """Verticaal zeshoekig segment."""
+    def h_poly(sx0, sy, w, h):
+        b = min(bv, h // 2 - 1, w // 2 - 1)
+        pts = [
+            (sx0 + b + g,     sy + g),
+            (sx0 + w - b - g, sy + g),
+            (sx0 + w - g,     sy + h // 2),
+            (sx0 + w - b - g, sy + h - g),
+            (sx0 + b + g,     sy + h - g),
+            (sx0 + g,         sy + h // 2),
+        ]
+        return QPolygon([QPoint(sx(px, py), py) for px, py in pts])
+
+    def v_poly(sx0, sy, w, h):
         b = min(bv, w // 2 - 1, h // 2 - 1)
-        return QPolygon([
-            QPoint(sx + w // 2,    sy + g),
-            QPoint(sx + w - g,     sy + b + g),
-            QPoint(sx + w - g,     sy + h - b - g),
-            QPoint(sx + w // 2,    sy + h - g),
-            QPoint(sx + g,         sy + h - b - g),
-            QPoint(sx + g,         sy + b + g),
-        ])
+        pts = [
+            (sx0 + w // 2,    sy + g),
+            (sx0 + w - g,     sy + b + g),
+            (sx0 + w - g,     sy + h - b - g),
+            (sx0 + w // 2,    sy + h - g),
+            (sx0 + g,         sy + h - b - g),
+            (sx0 + g,         sy + b + g),
+        ]
+        return QPolygon([QPoint(sx(px, py), py) for px, py in pts])
 
     segs = {
-        'a': h_poly(x,        y,              sw, t),
-        'b': v_poly(x + sw-t, y,              t,  half),
-        'c': v_poly(x + sw-t, y + half,       t,  half),
-        'd': h_poly(x,        y + sh - t,     sw, t),
-        'e': v_poly(x,        y + half,       t,  half),
-        'f': v_poly(x,        y,              t,  half),
+        'a': h_poly(x,        y,               sw, t),
+        'b': v_poly(x + sw-t, y,               t,  half),
+        'c': v_poly(x + sw-t, y + half,        t,  half),
+        'd': h_poly(x,        y + sh - t,      sw, t),
+        'e': v_poly(x,        y + half,        t,  half),
+        'f': v_poly(x,        y,               t,  half),
         'g': h_poly(x,        y + half - t//2, sw, t),
     }
 
@@ -211,12 +220,13 @@ class VfdDisplay(QWidget):
             x += dot_w if c == '.' else (seg_w + gap)
         freq_total_w = x
 
-        mode_text = self._mode
-        mode_w    = aux_fm.horizontalAdvance(mode_text) + 12 if mode_text else 0
-        kHz_w     = aux_fm.horizontalAdvance("kHz")
-        total_w   = mode_w + freq_total_w + 8 + kHz_w
-        group_x   = (self.width() - total_w) // 2
-        freq_x    = group_x + mode_w
+        mode_text  = self._mode
+        mode_w     = aux_fm.horizontalAdvance(mode_text) + 12 if mode_text else 0
+        kHz_w      = aux_fm.horizontalAdvance("kHz")
+        shear_xtra = int(_7SEG_SHEAR * seg_h)   # extra breedte door italic
+        total_w    = mode_w + freq_total_w + shear_xtra + 8 + kHz_w
+        group_x    = (self.width() - total_w) // 2
+        freq_x     = group_x + mode_w
 
         tag_fm    = QFontMetrics(QFont("Segoe UI", 7, QFont.Bold))
         tag_h     = tag_fm.height()
@@ -228,7 +238,7 @@ class VfdDisplay(QWidget):
                     freq_str=freq_str, offsets=offsets,
                     freq_x=freq_x, freq_total_w=freq_total_w,
                     mode_text=mode_text, group_x=group_x,
-                    kHz_x=freq_x + freq_total_w + 8,
+                    kHz_x=freq_x + freq_total_w + shear_xtra + 8,
                     aux_sz=aux_sz, aux_fm=aux_fm,
                     seg_y=seg_y, c_top=c_top, c_h=c_h)
 
@@ -505,12 +515,13 @@ class SmallVfd(QWidget):
             x += dot_w if c == '.' else (seg_w + gap)
         freq_total_w = x
 
-        mode_text = self._mode
-        mode_w    = aux_fm.horizontalAdvance(mode_text) + 8 if mode_text else 0
-        kHz_w     = aux_fm.horizontalAdvance("kHz")
-        total_w   = mode_w + freq_total_w + 6 + kHz_w
-        group_x   = (self.width() - total_w) // 2
-        freq_x    = group_x + mode_w
+        mode_text  = self._mode
+        mode_w     = aux_fm.horizontalAdvance(mode_text) + 8 if mode_text else 0
+        kHz_w      = aux_fm.horizontalAdvance("kHz")
+        shear_xtra = int(_7SEG_SHEAR * seg_h)   # extra breedte door italic
+        total_w    = mode_w + freq_total_w + shear_xtra + 6 + kHz_w
+        group_x    = (self.width() - total_w) // 2
+        freq_x     = group_x + mode_w
 
         tag_fm    = QFontMetrics(QFont("Segoe UI", 6, QFont.Bold))
         tag_h     = tag_fm.height()
@@ -522,7 +533,7 @@ class SmallVfd(QWidget):
                     freq_str=freq_str, offsets=offsets,
                     freq_x=freq_x, freq_total_w=freq_total_w,
                     mode_text=mode_text, group_x=group_x,
-                    kHz_x=freq_x + freq_total_w + 6,
+                    kHz_x=freq_x + freq_total_w + shear_xtra + 6,
                     aux_sz=aux_sz, aux_fm=aux_fm,
                     seg_y=seg_y, c_top=c_top, c_h=c_h)
 
