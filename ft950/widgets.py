@@ -720,10 +720,18 @@ class SMeterBar(QWidget):
     """
 
     # Standaard marks — labels en kleuren (vast); raw-waarden instelbaar
-    _MARK_LABELS = ["1", "3", "5", "7", "9", "+20", "+40", "+60"]
-    _MARK_COLORS = ["#00BB44","#00BB44","#66CC00","#AACC00",
-                    "#FFCC00","#FF8800","#FF4400","#FF2020"]
-    _DEFAULT_RAW  = [18, 54, 90, 126, 162, 189, 216, 243]
+    _MARK_LABELS = ["1","2","3","4","5","6","7","8","9",
+                    "+10","+20","+30","+40","+50","+60"]
+    _MARK_COLORS = [
+        "#00BB44","#00BB44","#44CC00","#66CC00","#88CC00",  # S1-S5
+        "#AACC00","#CCCC00","#FFCC00","#FFAA00",            # S6-S9
+        "#FF8800","#FF6600","#FF4400","#FF2020",            # +10/+20/+30/+40
+        "#EE0000","#CC0000",                                # +50/+60
+    ]
+    _DEFAULT_RAW = [
+        18, 36, 54, 72, 90, 108, 126, 144, 162,   # S1-S9
+        175, 189, 202, 216, 229, 243               # +10-+60
+    ]
 
     def __init__(self, label="S", parent=None):
         super().__init__(parent)
@@ -799,21 +807,21 @@ class SMeterBar(QWidget):
 
         marks = self._MARKS
 
-        for i, (raw, lbl, _) in enumerate(marks):
+        for i, (raw, lbl, mark_col) in enumerate(marks):
             bx     = x0 + i * (blk_w + GAP)
             active = self._value >= raw
-            is_red = i >= 5
             is_sel = (i == self._active_block)
+            on_col = QColor(mark_col)
 
-            # Blokkleur: geselecteerd = fel opgelicht ongeacht meter-waarde
+            # Blokkleur
             if is_sel:
-                col  = QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER).lighter(160)
+                col  = on_col.lighter(170)
                 glow = col.lighter(120)
             elif active:
-                col  = QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER)
-                glow = col.lighter(130)
+                col  = on_col
+                glow = on_col.lighter(130)
             else:
-                col  = QColor(self._BLOCK_OFF_RED if is_red else self._BLOCK_OFF)
+                col  = QColor("#0E0E0E")
                 glow = col
 
             p.fillRect(bx, blk_y, blk_w, blk_h, col)
@@ -823,19 +831,13 @@ class SMeterBar(QWidget):
                 p.drawLine(bx + 1, blk_y + 1, bx + blk_w - 2, blk_y + 1)
 
             # Rand: geselecteerd = wit kader
-            if is_sel:
-                p.setPen(QPen(QColor("#FFFFFF"), 1))
-            else:
-                p.setPen(QPen(col.lighter(150) if active else QColor(BORDER), 1))
+            p.setPen(QPen(QColor("#FFFFFF") if is_sel
+                          else (on_col.lighter(150) if active else QColor(BORDER)), 1))
             p.drawRect(bx, blk_y, blk_w - 1, blk_h - 1)
 
-            # Label
-            if is_sel:
-                p.setPen(QColor("#FFFFFF"))
-            elif active:
-                p.setPen(QColor(self._BLOCK_ON_RED if is_red else self._BLOCK_ON_AMBER))
-            else:
-                p.setPen(QColor(TEXT_DIM))
+            # Label boven blokje
+            p.setPen(QColor("#FFFFFF") if is_sel
+                     else (on_col if active else QColor(TEXT_DIM)))
             lw = lfm.horizontalAdvance(lbl)
             tx = bx + (blk_w - lw) // 2
             p.drawText(tx, lbl_y + lfm.ascent(), lbl)

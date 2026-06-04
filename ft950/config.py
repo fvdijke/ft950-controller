@@ -221,8 +221,11 @@ class Ft950Config:
     ant_sel:        int  = 1        # 1 of 2
 
     # ── S-meter kalibratie ────────────────────────────────────────────────────
-    # Ruwe waarden (0-255) die overeenkomen met S1, S3, S5, S7, S9, +20, +40, +60
-    smeter_cal: list = field(default_factory=lambda: [18, 54, 90, 126, 162, 189, 216, 243])
+    # 15 ruwe waarden (0-255): S1-S9 + +10/+20/+30/+40/+50/+60 dB
+    smeter_cal: list = field(default_factory=lambda: [
+        18, 36, 54, 72, 90, 108, 126, 144, 162,   # S1-S9
+        175, 189, 202, 216, 229, 243               # +10/+20/+30/+40/+50/+60
+    ])
 
     # ── Weergave-lettergroottes ───────────────────────────────────────────────────
     band_btn_font:  int  = 7        # pt  band/mode knoppen in het display
@@ -251,6 +254,19 @@ def load_config() -> Ft950Config:
                         setattr(cfg, k, v)
     except Exception:
         pass
+
+    # Migratie: 8-punts kalibratie (oud) → 15-punts via interpolatie
+    if len(cfg.smeter_cal) == 8:
+        o = cfg.smeter_cal
+        cfg.smeter_cal = [
+            o[0], (o[0]+o[1])//2, o[1], (o[1]+o[2])//2, o[2],   # S1-S5
+            (o[2]+o[3])//2, o[3], (o[3]+o[4])//2, o[4],          # S6-S9
+            (o[4]+o[5])//2, o[5], (o[5]+o[6])//2,                 # +10/+20/+30
+            o[6], (o[6]+o[7])//2, o[7],                           # +40/+50/+60
+        ]
+    elif len(cfg.smeter_cal) != 15:
+        cfg.smeter_cal = Ft950Config.__dataclass_fields__['smeter_cal'].default_factory()
+
     return cfg
 
 

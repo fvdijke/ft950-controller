@@ -1595,15 +1595,21 @@ class SMeterCalibDialog(QDialog):
       S1=18  S3=54  S5=90  S7=126  S9=162  +20=189  +40=216  +60=243
     """
 
-    _LABELS   = ["S 1", "S 3", "S 5", "S 7", "S 9", "+20 dB", "+40 dB", "+60 dB"]
-    _DEFAULTS = [18, 54, 90, 126, 162, 189, 216, 243]
+    _LABELS = [
+        "S 1","S 2","S 3","S 4","S 5","S 6","S 7","S 8","S 9",
+        "+10 dB","+20 dB","+30 dB","+40 dB","+50 dB","+60 dB",
+    ]
+    _DEFAULTS = [
+        18, 36, 54, 72, 90, 108, 126, 144, 162,
+        175, 189, 202, 216, 229, 243,
+    ]
 
     def __init__(self, smeter_widget, current_cal: list, parent=None):
         super().__init__(parent)
         self._smeter      = smeter_widget   # SMeterBar widget (live preview)
         self._current_raw = 0               # live ruwe waarde van radio
         self.setWindowTitle(tr("S-meter kalibratie"))
-        self.setFixedWidth(460)
+        self.setFixedWidth(480)
         self.setStyleSheet(_QSS_DIALOG)
         self._build(current_cal)
 
@@ -1718,7 +1724,8 @@ class SMeterCalibDialog(QDialog):
         self._preview.set_value(raw)
         # Bepaal welk S-punt dit ongeveer is
         cal = self.get_calibration()
-        labels = ["S1","S3","S5","S7","S9","+20","+40","+60"]
+        labels = ["S1","S2","S3","S4","S5","S6","S7","S8","S9",
+                  "+10","+20","+30","+40","+50","+60"]
         level = "< S1"
         for i, r in enumerate(cal):
             if raw >= r:
